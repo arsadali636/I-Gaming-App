@@ -123,17 +123,14 @@ export default function FAQPage() {
   });
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <section className="py-20 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[250px] bg-primary/10 rounded-full blur-[120px]" />
-
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div {...fadeUp} className="text-center mb-14">
-            <h1 className="text-4xl sm:text-5xl font-bold mb-4">
-              Frequently Asked <span className="gradient-text">Questions</span>
+            <h1 className="text-4xl sm:text-5xl font-bold mb-4 text-text-primary">
+              Frequently Asked <span className="text-primary">Questions</span>
             </h1>
-            <p className="text-lg text-muted-foreground max-w-xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-xl mx-auto">
               Everything you need to know about iGaming Connect.
             </p>
           </motion.div>
@@ -146,13 +143,13 @@ export default function FAQPage() {
             <div className="relative">
               <Search
                 size={18}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted"
               />
               <Input
                 placeholder="Search questions..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-11 h-12 text-base"
+                className="pl-11 h-12 text-base bg-surface border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary/20"
               />
             </div>
           </motion.div>
@@ -170,10 +167,10 @@ export default function FAQPage() {
                   setOpenFaq(null);
                 }}
                 className={cn(
-                  "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-all border",
                   activeCategory === cat
-                    ? "bg-primary/15 text-primary border border-primary/30"
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/5 border border-transparent"
+                    ? "bg-primary/10 text-primary border-primary/20"
+                    : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated border-transparent"
                 )}
               >
                 {cat}
@@ -194,7 +191,7 @@ export default function FAQPage() {
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true }}
                       transition={{ duration: 0.3, delay: i * 0.03 }}
-                      className="glass-card overflow-hidden"
+                      className="bg-surface border border-border rounded-xl overflow-hidden"
                     >
                       <button
                         onClick={() => setOpenFaq(isOpen ? null : faqKey)}
@@ -204,14 +201,14 @@ export default function FAQPage() {
                           <span className="text-[10px] font-medium uppercase tracking-wider text-primary mb-1 block">
                             {faq.category}
                           </span>
-                          <span className="text-sm font-medium text-foreground">
+                          <span className="text-sm font-medium text-text-primary">
                             {faq.q}
                           </span>
                         </div>
                         <ChevronDown
                           size={18}
                           className={cn(
-                            "text-muted-foreground transition-transform duration-200 flex-shrink-0",
+                            "text-text-muted transition-transform duration-200 flex-shrink-0",
                             isOpen && "rotate-180"
                           )}
                         />
@@ -226,7 +223,7 @@ export default function FAQPage() {
                         className="overflow-hidden"
                       >
                         <div className="px-5 pb-5 pt-0">
-                          <p className="text-sm text-muted-foreground leading-relaxed border-t border-glass-border pt-4">
+                          <p className="text-sm text-text-secondary leading-relaxed border-t border-border pt-4">
                             {faq.a}
                           </p>
                         </div>
@@ -237,11 +234,11 @@ export default function FAQPage() {
               </div>
             ) : (
               <div className="text-center py-16">
-                <Search size={32} className="mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">
+                <Search size={32} className="mx-auto mb-4 text-text-muted" />
+                <h3 className="text-lg font-semibold text-text-primary mb-2">
                   No results found
                 </h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-text-secondary">
                   Try a different search term or category.
                 </p>
               </div>
@@ -250,18 +247,18 @@ export default function FAQPage() {
 
           <motion.div
             {...fadeUp}
-            className="text-center mt-16 glass-card p-10 max-w-2xl mx-auto"
+            className="text-center mt-16 bg-surface border border-border rounded-xl p-10 max-w-2xl mx-auto"
           >
-            <h2 className="text-2xl font-bold mb-3">
+            <h2 className="text-2xl font-bold mb-3 text-text-primary">
               Still have questions?
             </h2>
-            <p className="text-muted-foreground mb-6">
+            <p className="text-text-secondary mb-6">
               Our support team is here to help. Reach out and we&apos;ll get back
               to you within 24 hours.
             </p>
             <a
               href="/contact"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-semibold text-sm shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-colors"
             >
               Contact Support
             </a>

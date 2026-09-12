@@ -7,6 +7,7 @@ export async function middleware(request: NextRequest) {
   const publicPaths = [
     "/",
     "/marketplace",
+    "/categories",
     "/pricing",
     "/about",
     "/contact",
@@ -18,9 +19,10 @@ export async function middleware(request: NextRequest) {
   const isPublicPath =
     publicPaths.includes(pathname) ||
     pathname.startsWith("/category/") ||
+    pathname.startsWith("/categories/") ||
     pathname.startsWith("/company/") ||
     pathname.startsWith("/api/auth/") ||
-    pathname.startsWith("/api/companies") && request.method === "GET";
+    (pathname.startsWith("/api/companies") && request.method === "GET");
 
   const sessionToken = request.cookies.get("igc-session")?.value;
   const hasSession = Boolean(sessionToken);

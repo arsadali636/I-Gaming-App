@@ -151,7 +151,7 @@ export default function AdminPaymentsPage() {
                     {formatCurrency(m.value, "USD")}
                   </span>
                   <div
-                    className="w-full rounded-t-lg bg-gradient-to-t from-primary to-primary/60 transition-all duration-500"
+                    className="w-full rounded-t-lg bg-primary transition-all duration-500"
                     style={{
                       height: `${(m.value / maxRevenue) * 140}px`,
                       minHeight: "4px",

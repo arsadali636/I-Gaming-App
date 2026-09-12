@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { apiClient } from "@/lib/api-client";
 
 interface PlanInfo {
   id: string;
@@ -64,7 +65,7 @@ const PLANS = [
 ];
 
 export default function SubscriptionPage() {
-  const { wallet } = useAuth();
+  const { wallet, refreshWallet } = useAuth();
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,24 +73,27 @@ export default function SubscriptionPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [subRes, txRes] = await Promise.all([
-          fetch("/api/subscription"),
-          fetch("/api/wallet/transactions"),
+        const [subRes, txRes] = await Promise.allSettled([
+          fetch("/api/subscription").then(r => r.ok ? r.json() : null),
+          apiClient.get<any>("/api/v1/credits/history/"),
         ]);
-        if (subRes.ok) {
-          const data = await subRes.json();
-          setSubscription(data.subscription ?? null);
+        
+        if (subRes.status === "fulfilled" && subRes.value) {
+          setSubscription(subRes.value.subscription ?? null);
         }
-        if (txRes.ok) {
-          const data = await txRes.json();
-          setTransactions(data.transactions ?? []);
+        if (txRes.status === "fulfilled" && txRes.value) {
+          const list = Array.isArray(txRes.value) ? txRes.value : txRes.value.results ?? [];
+          setTransactions(list);
+        }
+        if (refreshWallet) {
+          refreshWallet();
         }
       } catch {} finally {
         setLoading(false);
       }
     }
     fetchData();
-  }, []);
+  }, [refreshWallet]);
 
   const handleManageSubscription = async () => {
     try {
@@ -164,7 +168,7 @@ export default function SubscriptionPage() {
                   </div>
                   <div className="w-full h-2 rounded-full bg-muted/50 overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-neon-purple to-neon-cyan transition-all duration-500"
+                      className="h-full rounded-full bg-primary transition-all duration-500"
                       style={{ width: `${usagePercent}%` }}
                     />
                   </div>

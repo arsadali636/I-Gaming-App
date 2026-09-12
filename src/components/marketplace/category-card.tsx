@@ -1,14 +1,61 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
-import type { LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  Trophy,
+  Dice1,
+  Sliders,
+  Grid3x3,
+  Gamepad2,
+  Palette,
+  Building2,
+  Server,
+  CreditCard,
+  Shield,
+  ShieldCheck,
+  Layers,
+  Cpu,
+  FileCheck,
+  Zap,
+  Globe2,
+  Users,
+  Award,
+  TrendingUp,
+  Share2,
+  Folder,
+  ArrowRight,
+  type LucideIcon,
+} from "lucide-react";
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  Trophy,
+  Dice1,
+  Sliders,
+  Grid3x3,
+  Gamepad2,
+  Palette,
+  Building2,
+  Server,
+  CreditCard,
+  Shield,
+  ShieldCheck,
+  Layers,
+  Cpu,
+  FileCheck,
+  Zap,
+  Globe2,
+  Users,
+  Award,
+  TrendingUp,
+  Share2,
+};
 
 interface CategoryCardProps {
   name: string;
   slug: string;
-  icon: LucideIcon;
-  color: string;
+  icon?: string | LucideIcon;
+  color?: string;
   count?: number;
   description?: string;
   index?: number;
@@ -16,78 +63,67 @@ interface CategoryCardProps {
 
 export default function CategoryCard({
   name,
-  icon: Icon,
-  color,
+  slug,
+  icon,
+  color = "#4F46E5",
   count,
   description,
   index = 0,
 }: CategoryCardProps) {
+  let IconComponent: LucideIcon = Building2;
+
+  if (typeof icon === "string") {
+    IconComponent = ICON_MAP[icon] || Building2;
+  } else if (icon) {
+    IconComponent = icon;
+  }
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.4, delay: index * 0.05 }}
-      whileHover={{ scale: 1.03, y: -4 }}
-      className="group relative glass-card p-6 cursor-pointer overflow-hidden"
-    >
-      <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-        style={{
-          background: `radial-gradient(circle at 50% 50%, ${color}15, transparent 70%)`,
-        }}
-      />
-      <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-        style={{
-          boxShadow: `inset 0 0 30px ${color}10, 0 0 20px ${color}15`,
-        }}
-      />
+    <Link href={`/category/${slug}`}>
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-40px" }}
+        transition={{ duration: 0.35, delay: index * 0.04 }}
+        whileHover={{ y: -3 }}
+        className="group relative bg-[#121827] border border-[#252A3A] hover:border-[#343B52] rounded-2xl p-5 cursor-pointer overflow-hidden h-full flex flex-col justify-between transition-all duration-200 shadow-md hover:shadow-xl hover:shadow-black/40"
+      >
+        <div className="relative z-10 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div
+              className="w-11 h-11 rounded-xl border flex items-center justify-center transition-transform duration-200 group-hover:scale-105"
+              style={{
+                backgroundColor: `${color}18`,
+                borderColor: `${color}35`,
+              }}
+            >
+              <IconComponent
+                size={20}
+                style={{ color }}
+                className="transition-transform duration-200"
+              />
+            </div>
 
-      <div className="relative z-10 flex items-start gap-4">
-        <div
-          className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:shadow-lg"
-          style={{
-            background: `${color}15`,
-            border: `1px solid ${color}30`,
-          }}
-        >
-          <Icon
-            size={22}
-            style={{ color }}
-            className="transition-transform duration-300 group-hover:scale-110"
-          />
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-foreground text-sm">{name}</h3>
             {count !== undefined && (
-              <span
-                className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
-                style={{
-                  background: `${color}20`,
-                  color,
-                }}
-              >
-                {count}
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#0D1220] border border-[#252A3A] text-[#A5B4FC]">
+                {count} {count === 1 ? "Company" : "Companies"}
               </span>
             )}
           </div>
-          {description && (
-            <p className="text-xs text-muted-foreground line-clamp-2">
-              {description}
-            </p>
-          )}
-        </div>
-      </div>
 
-      <div
-        className="absolute bottom-0 left-0 right-0 h-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-        style={{
-          background: `linear-gradient(90deg, transparent, ${color}, transparent)`,
-        }}
-      />
-    </motion.div>
+          <div>
+            <h3 className="font-bold text-[#F8FAFC] text-base group-hover:text-[#22C1DC] transition-colors flex items-center justify-between">
+              <span>{name}</span>
+              <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 text-[#22C1DC] transition-all duration-200" />
+            </h3>
+            {description && (
+              <p className="text-xs text-[#A1A9B8] line-clamp-2 leading-relaxed mt-1.5">
+                {description}
+              </p>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </Link>
   );
 }

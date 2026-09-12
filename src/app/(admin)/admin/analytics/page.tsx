@@ -123,8 +123,8 @@ export default function AdminAnalyticsPage() {
                 <Skeleton className="h-16 w-full" />
               ) : (
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${stat.color}`}>
-                    <stat.icon className="h-5 w-5 text-white" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-elevated border border-border">
+                    <stat.icon className="h-5 w-5 text-primary" />
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">{stat.label}</p>
@@ -155,7 +155,7 @@ export default function AdminAnalyticsPage() {
                   <div key={`${m.year}-${m.month}`} className="flex-1 flex flex-col items-center gap-1">
                     <span className="text-xs text-muted-foreground">{m.value}</span>
                     <div
-                      className="w-full rounded-t-lg bg-gradient-to-t from-primary to-primary/60"
+                      className="w-full rounded-t-lg bg-primary"
                       style={{ height: `${(m.value / maxUserTrend) * 100}px`, minHeight: "4px" }}
                     />
                     <span className="text-[10px] text-muted-foreground">{m.label}</span>
@@ -178,7 +178,7 @@ export default function AdminAnalyticsPage() {
                   <div key={`${m.year}-${m.month}`} className="flex-1 flex flex-col items-center gap-1">
                     <span className="text-xs text-muted-foreground">{m.value}</span>
                     <div
-                      className="w-full rounded-t-lg bg-gradient-to-t from-secondary to-secondary/60"
+                      className="w-full rounded-t-lg bg-primary/80"
                       style={{ height: `${(m.value / maxCompanyTrend) * 100}px`, minHeight: "4px" }}
                     />
                     <span className="text-[10px] text-muted-foreground">{m.label}</span>

@@ -1,45 +1,52 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
-import { apiClient } from "@/lib/api-client";
 
 export function useAuth() {
   const { user, wallet, isLoading, setUser, setWallet, setLoading, logout } =
     useAuthStore();
   const router = useRouter();
 
-  useEffect(() => {
-    async function fetchUser() {
-      try {
-        const data = await apiClient.get<any>("/api/v1/auth/me/");
-        if (data && data.id) {
-          setUser(data);
-          if (data.wallet_balance !== undefined) {
+  const fetchUser = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.user) {
+          setUser(data.user);
+          if (data.wallet) {
             setWallet({
-              id: data.id,
-              user_id: data.id,
-              balance: data.wallet_balance,
-              total_earned: data.wallet_balance,
-              total_used: 0,
+              id: data.wallet.id || "wallet",
+              user_id: data.user.id,
+              balance: data.wallet.balance ?? 0,
+              total_earned: data.wallet.total_earned ?? 0,
+              total_used: data.wallet.total_used ?? 0,
             });
           }
         } else {
           setUser(null);
         }
-      } catch {
+      } else {
         setUser(null);
-      } finally {
-        setLoading(false);
       }
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
-    if (isLoading) fetchUser();
-  }, [isLoading, setUser, setWallet, setLoading]);
+  }, [setUser, setWallet, setLoading]);
+
+  useEffect(() => {
+    if (isLoading) {
+      fetchUser();
+    }
+  }, [isLoading, fetchUser]);
 
   const handleLogout = async () => {
     try {
-      await apiClient.post("/api/v1/auth/logout/");
+      await fetch("/api/auth/logout", { method: "POST" });
     } catch {
       // Ignore network errors on logout cleanup
     } finally {
@@ -49,7 +56,14 @@ export function useAuth() {
     }
   };
 
-  return { user, wallet, isLoading, logout: handleLogout };
+  return {
+    user,
+    wallet,
+    isLoading,
+    logout: handleLogout,
+    refreshUser: fetchUser,
+    refreshWallet: fetchUser,
+  };
 }
 
 export function useRequireAuth() {

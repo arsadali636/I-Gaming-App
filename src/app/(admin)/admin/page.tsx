@@ -148,10 +148,8 @@ export default function AdminOverviewPage() {
                       {getStatValue(stat.key)}
                     </p>
                   </div>
-                  <div
-                    className={`rounded-lg bg-gradient-to-br ${stat.color} p-2.5`}
-                  >
-                    <stat.icon className="h-5 w-5 text-white" />
+                  <div className="rounded-lg bg-surface-elevated border border-border p-2.5">
+                    <stat.icon className="h-5 w-5 text-primary" />
                   </div>
                 </div>
               )}

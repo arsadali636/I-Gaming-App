@@ -285,11 +285,11 @@ export default function CategoryPage({
             transition={{ duration: 0.4, delay: 0.2 }}
           >
             <div className="flex items-center gap-2 mb-3">
-              <div className="h-px flex-1 bg-gradient-to-r from-primary/40 to-transparent" />
-              <span className="text-[11px] font-semibold tracking-widest uppercase text-primary/70">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-[11px] font-semibold tracking-widest uppercase text-text-muted">
                 Registered Partners
               </span>
-              <div className="h-px flex-1 bg-gradient-to-l from-primary/40 to-transparent" />
+              <div className="h-px flex-1 bg-border" />
             </div>
             <div className="flex flex-wrap gap-2 justify-center">
               {(data?.companies ?? []).map((company) => (

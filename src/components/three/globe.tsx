@@ -183,7 +183,7 @@ export default function Globe() {
           <GlobeScene />
         </Float>
       </Canvas>
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-transparent to-background" />
     </div>
   );
 }
+

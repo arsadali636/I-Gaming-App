@@ -2,14 +2,12 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Building2,
   Globe,
   MapPin,
   Briefcase,
-  Package,
-  Shield,
   Mail,
   Phone,
   Check,
@@ -17,109 +15,114 @@ import {
   ArrowLeft,
   Loader2,
   Sparkles,
-  Plus,
   X,
   Calendar,
   Users,
-  DollarSign,
+  Send,
+  Upload,
+  Image as ImageIcon,
+  CheckCircle2,
+  Star,
+  Zap,
+  Info,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import type { Category } from "@/types";
 import { apiClient } from "@/lib/api-client";
 
-interface LicenseEntry {
-  id: string;
-  jurisdiction: string;
-  license_name: string;
-  license_number: string;
-  status: "active" | "pending" | "expired";
-}
-
-interface ContactEntry {
-  id: string;
-  full_name: string;
-  position: string;
-  email: string;
-  phone: string;
-}
-
 interface OnboardingData {
+  accountType: "affiliate" | "operator" | "provider";
   companyName: string;
-  description: string;
   website: string;
-  headquarters: string;
-  employee_count: string;
-  revenue_range: string;
-  founded_year: string;
+  attendEvent: boolean;
+  eventChoice: string;
+  logoUrl: string | null;
+  contactEmail: string;
+  whatsapp: string;
+  telegram: string;
+  aboutCompany: string;
   category_ids: string[];
-  products: string[];
-  services: string[];
-  markets: string[];
-  licenses: LicenseEntry[];
-  contacts: ContactEntry[];
 }
 
-const TOTAL_STEPS = 8;
-
-const MARKET_OPTIONS = [
-  "Europe",
-  "North America",
-  "Latin America",
-  "Asia Pacific",
-  "Africa",
-  "Middle East",
-  "Oceania",
-  "Global",
+const STEPS = [
+  { id: 1, label: "Account" },
+  { id: 2, label: "Company Details" },
+  { id: 3, label: "Event Preference" },
+  { id: 4, label: "Contact & Profile" },
+  { id: 5, label: "Complete" },
 ];
 
-const EMPLOYEE_COUNTS = ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"];
-const REVENUE_RANGES = ["Under $1M", "$1M - $5M", "$5M - $10M", "$10M - $50M", "$50M - $100M", "$100M+"];
+const ACCOUNT_TYPES = [
+  {
+    id: "affiliate",
+    title: "Affiliate / Publisher",
+    icon: Users,
+    description: "Drive traffic, promote operators, and analyze performance networks.",
+  },
+  {
+    id: "operator",
+    title: "Operator / Casino",
+    icon: Building2,
+    description: "Manage online gaming brands, acquire traffic, and source B2B providers.",
+  },
+  {
+    id: "provider",
+    title: "B2B Technology Provider",
+    icon: Briefcase,
+    description: "Provide games, platform solutions, payments, compliance, or marketing services.",
+  },
+];
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [saving, setSaving] = useState(false);
+  const [currentStep, setCurrentStep] = useState(2); // Step 1 Account is completed upon registration
   const [submitting, setSubmitting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   const [form, setForm] = useState<OnboardingData>({
+    accountType: "operator",
     companyName: "",
-    description: "",
     website: "",
-    headquarters: "",
-    employee_count: "",
-    revenue_range: "",
-    founded_year: "",
+    attendEvent: true,
+    eventChoice: "iGB LIVE 2026 / NEXT.io London Summit",
+    logoUrl: null,
+    contactEmail: "",
+    whatsapp: "",
+    telegram: "",
+    aboutCompany: "",
     category_ids: [],
-    products: [],
-    services: [],
-    markets: [],
-    licenses: [],
-    contacts: [],
   });
 
   useEffect(() => {
     async function fetchCategories() {
       try {
-        const data = await apiClient.get<any>("/api/v1/categories/");
-        const categoryList = Array.isArray(data) ? data : data.categories || [];
-        setCategories(categoryList);
-      } catch {} finally {
+        const res = await fetch("/api/categories");
+        if (res.ok) {
+          const data = await res.json();
+          setCategories(data.categories || []);
+        } else {
+          const data = await apiClient.get<any>("/api/v1/categories/");
+          setCategories(Array.isArray(data) ? data : data.categories || []);
+        }
+      } catch {
+        try {
+          const data = await apiClient.get<any>("/api/v1/categories/");
+          setCategories(Array.isArray(data) ? data : data.categories || []);
+        } catch {}
+      } finally {
         setLoadingCategories(false);
       }
     }
     fetchCategories();
   }, []);
 
-  const updateForm = useCallback((field: keyof OnboardingData, value: unknown) => {
+  const updateField = useCallback((field: keyof OnboardingData, value: unknown) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => {
       const next = { ...prev };
@@ -128,99 +131,39 @@ export default function OnboardingPage() {
     });
   }, []);
 
-  const toggleCategory = (catId: string) => {
-    setForm((prev) => ({
-      ...prev,
-      category_ids: prev.category_ids.includes(catId)
-        ? prev.category_ids.filter((id) => id !== catId)
-        : [...prev.category_ids, catId],
-    }));
-    setErrors((prev) => {
-      const next = { ...prev };
-      delete next.category_ids;
-      return next;
-    });
-  };
-
-  const toggleMarket = (market: string) => {
-    setForm((prev) => ({
-      ...prev,
-      markets: prev.markets.includes(market)
-        ? prev.markets.filter((m) => m !== market)
-        : [...prev.markets, market],
-    }));
-  };
-
-  const addLicense = () => {
-    setForm((prev) => ({
-      ...prev,
-      licenses: [
-        ...prev.licenses,
-        { id: `new-${Date.now()}`, jurisdiction: "", license_name: "", license_number: "", status: "pending" as const },
-      ],
-    }));
-  };
-
-  const removeLicense = (id: string) => {
-    setForm((prev) => ({ ...prev, licenses: prev.licenses.filter((l) => l.id !== id) }));
-  };
-
-  const updateLicense = (id: string, field: keyof LicenseEntry, value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      licenses: prev.licenses.map((l) => (l.id === id ? { ...l, [field]: value } : l)),
-    }));
-  };
-
-  const addContact = () => {
-    setForm((prev) => ({
-      ...prev,
-      contacts: [
-        ...prev.contacts,
-        { id: `new-${Date.now()}`, full_name: "", position: "", email: "", phone: "" },
-      ],
-    }));
-  };
-
-  const removeContact = (id: string) => {
-    setForm((prev) => ({ ...prev, contacts: prev.contacts.filter((c) => c.id !== id) }));
-  };
-
-  const updateContact = (id: string, field: keyof ContactEntry, value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      contacts: prev.contacts.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
-    }));
-  };
-
-  const addProduct = (name: string) => {
-    if (name.trim() && !form.products.includes(name.trim())) {
-      updateForm("products", [...form.products, name.trim()]);
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+        updateField("logoUrl", reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
-  const removeProduct = (name: string) => {
-    updateForm("products", form.products.filter((p) => p !== name));
+  const removeLogo = () => {
+    setLogoPreview(null);
+    updateField("logoUrl", null);
   };
 
-  const addService = (name: string) => {
-    if (name.trim() && !form.services.includes(name.trim())) {
-      updateForm("services", [...form.services, name.trim()]);
-    }
-  };
-
-  const removeService = (name: string) => {
-    updateForm("services", form.services.filter((s) => s !== name));
-  };
-
-  const validateStep = (): boolean => {
+  const validateStep = (stepNum: number): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (step === 1) {
-      if (!form.companyName.trim()) newErrors.companyName = "Company name is required";
-      if (!form.description.trim()) newErrors.description = "Description is required";
-    } else if (step === 2) {
-      if (form.category_ids.length === 0) newErrors.category_ids = "Select at least one category";
+    if (stepNum === 2) {
+      if (!form.companyName.trim()) {
+        newErrors.companyName = "Company name is required.";
+      }
+      if (form.website.trim() && !/^(https?:\/\/)?([\w-]+\.)+[\w-]+(\/.*)?$/i.test(form.website.trim())) {
+        newErrors.website = "Please enter a valid website URL (e.g. https://company.com).";
+      }
+    }
+
+    if (stepNum === 4) {
+      if (form.contactEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail.trim())) {
+        newErrors.contactEmail = "Please enter a valid contact email.";
+      }
     }
 
     setErrors(newErrors);
@@ -228,68 +171,39 @@ export default function OnboardingPage() {
   };
 
   const handleNext = () => {
-    if (step === 1 || step === 2) {
-      if (!validateStep()) return;
-    }
-    setStep((s) => Math.min(TOTAL_STEPS - 1, s + 1));
+    if (!validateStep(currentStep)) return;
+    setCurrentStep((s) => Math.min(5, s + 1));
   };
 
   const handleBack = () => {
-    setStep((s) => Math.max(0, s - 1));
-  };
-
-  const handleSkip = () => {
-    setStep((s) => Math.min(TOTAL_STEPS - 1, s + 1));
+    setCurrentStep((s) => Math.max(2, s - 1));
   };
 
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
       const company = await apiClient.post<any>("/api/v1/companies/", {
-        name: form.companyName,
-        description: form.description,
+        name: form.companyName || "My iGaming Company",
+        description: form.aboutCompany || `${form.accountType.toUpperCase()} partner on iGaming Connect.`,
         website: form.website || undefined,
-        founded_year: form.founded_year ? parseInt(form.founded_year) : undefined,
-        headquarters: form.headquarters || undefined,
-        employee_count: form.employee_count || undefined,
-        revenue_range: form.revenue_range || undefined,
-        market: form.markets[0] || undefined,
+        logo_url: form.logoUrl || undefined,
         categories: form.category_ids,
       });
 
-      if (company && company.id && form.licenses.length > 0) {
-        for (const lic of form.licenses) {
-          if (lic.license_name) {
-            try {
-              await apiClient.post(`/api/v1/companies/${company.id}/licenses/`, {
-                license_name: lic.license_name,
-                jurisdiction: lic.jurisdiction || "Global",
-                license_number: lic.license_number || undefined,
-                status: lic.status || "active",
-              });
-            } catch {}
-          }
-        }
-      }
-
-      if (company && company.id && form.contacts.length > 0) {
-        for (const c of form.contacts) {
-          if (c.full_name && c.email) {
-            try {
-              await apiClient.post(`/api/v1/companies/${company.id}/contacts/`, {
-                full_name: c.full_name,
-                position: c.position || "Representative",
-                email: c.email,
-                phone: c.phone || undefined,
-              });
-            } catch {}
-          }
-        }
+      if (company && company.id && (form.contactEmail || form.whatsapp || form.telegram)) {
+        try {
+          await apiClient.post(`/api/v1/companies/${company.id}/contacts/`, {
+            full_name: "Primary Contact",
+            position: "Representative",
+            email: form.contactEmail || "contact@company.com",
+            phone: form.whatsapp || undefined,
+          });
+        } catch {}
       }
 
       router.push("/app");
       router.refresh();
-    } catch (err: unknown) {
+    } catch {
       router.push("/app");
     } finally {
       setSubmitting(false);
@@ -297,606 +211,464 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background py-8 px-4">
-      <div className="max-w-2xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
-        >
-          <h1 className="gradient-text text-3xl font-bold">iGaming Connect</h1>
-          <p className="text-muted-foreground mt-2">Complete your company setup</p>
-        </motion.div>
-
-        <div className="flex items-center justify-center gap-0 mb-8">
-          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <div key={i} className="flex items-center">
-              <div className="flex flex-col items-center">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
-                    i < step
-                      ? "bg-accent text-accent-foreground"
-                      : i === step
-                        ? "bg-primary text-primary-foreground shadow-[0_0_15px_rgba(108,92,231,0.4)]"
-                        : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {i < step ? <Check size={14} /> : i + 1}
-                </div>
-              </div>
-              {i < TOTAL_STEPS - 1 && (
-                <div
-                  className={`w-6 sm:w-10 h-0.5 mx-0.5 rounded-full transition-colors ${
-                    i < step ? "bg-accent" : "bg-muted"
-                  }`}
-                />
-              )}
-            </div>
-          ))}
+    <div className="min-h-screen bg-[#090B14] text-[#F8FAFC] py-10 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto space-y-8">
+        {/* Brand Header */}
+        <div className="text-center space-y-2">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[rgba(79,70,229,0.12)] border border-[rgba(79,70,229,0.20)] text-xs font-semibold text-[#A5B4FC]">
+            <Sparkles size={14} className="text-[#22C1DC]" />
+            <span>Enterprise Onboarding</span>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-[#F8FAFC]">
+            Setup Your Company Profile
+          </h1>
+          <p className="text-[#A1A9B8] text-sm max-w-md mx-auto">
+            Complete a few quick steps to verify your brand and start connecting.
+          </p>
         </div>
 
-        <motion.div
-          key={step}
-          initial={{ opacity: 0, x: 30 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -30 }}
-          transition={{ duration: 0.3 }}
-        >
-          <Card>
-            <CardContent className="p-6 sm:p-8">
-              {step === 0 && (
-                <div className="text-center space-y-6 py-4">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto">
-                    <Sparkles size={28} className="text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-foreground">Welcome to iGaming Connect!</h2>
-                    <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-                      Let&apos;s set up your company profile so you can connect with
-                      other iGaming professionals and grow your business.
-                    </p>
-                  </div>
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p>This will take about 5 minutes.</p>
-                    <p>You can always skip steps and complete your profile later.</p>
-                  </div>
-                  <Button variant="gradient" size="lg" onClick={handleNext} className="gap-2">
-                    Let&apos;s Get Started <ArrowRight size={16} />
-                  </Button>
+        {/* Multi-Step Progress Bar System */}
+        <div className="rounded-xl bg-[#111522] border border-[#252A3A] p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-medium text-[#A1A9B8]">
+              Step <strong className="text-[#F8FAFC]">{currentStep}</strong> of 5
+            </span>
+            <span className="text-xs font-semibold text-[#4F46E5]">
+              {STEPS.find((s) => s.id === currentStep)?.label}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-5 gap-2">
+            {STEPS.map((s) => {
+              const isCompleted = s.id < currentStep;
+              const isCurrent = s.id === currentStep;
+
+              return (
+                <div key={s.id} className="flex flex-col items-center gap-2">
+                  <div
+                    className={`h-2 w-full rounded-full transition-all duration-200 ${
+                      isCompleted
+                        ? "bg-[#22C1DC]"
+                        : isCurrent
+                        ? "bg-[#4F46E5]"
+                        : "bg-[#252A3A]"
+                    }`}
+                  />
+                  <span
+                    className={`text-[11px] font-medium hidden sm:block truncate ${
+                      isCompleted
+                        ? "text-[#22C1DC]"
+                        : isCurrent
+                        ? "text-[#F8FAFC] font-semibold"
+                        : "text-[#6B7280]"
+                    }`}
+                  >
+                    {s.label}
+                  </span>
                 </div>
-              )}
+              );
+            })}
+          </div>
+        </div>
 
-              {step === 1 && (
-                <div className="space-y-4">
-                  <CardHeader className="px-0 pt-0">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Building2 size={16} className="text-primary" />
-                      Company Information
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Tell us about your company.
-                    </p>
-                  </CardHeader>
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="company-name">Company Name *</Label>
-                      <Input
-                        id="company-name"
-                        placeholder="Your company name"
-                        value={form.companyName}
-                        onChange={(e) => updateForm("companyName", e.target.value)}
-                        error={!!errors.companyName}
-                      />
-                      {errors.companyName && (
-                        <p className="text-xs text-destructive">{errors.companyName}</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Description *</Label>
-                      <Textarea
-                        id="description"
-                        placeholder="Describe what your company does..."
-                        value={form.description}
-                        onChange={(e) => updateForm("description", e.target.value)}
-                        rows={3}
-                        error={!!errors.description}
-                      />
-                      {errors.description && (
-                        <p className="text-xs text-destructive">{errors.description}</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="website">Website</Label>
-                      <div className="relative">
-                        <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="website"
-                          placeholder="https://example.com"
-                          value={form.website}
-                          onChange={(e) => updateForm("website", e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="headquarters">Headquarters</Label>
-                      <div className="relative">
-                        <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="headquarters"
-                          placeholder="City, Country"
-                          value={form.headquarters}
-                          onChange={(e) => updateForm("headquarters", e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="founded">Founded Year</Label>
-                        <div className="relative">
-                          <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          <Input
-                            id="founded"
-                            type="number"
-                            placeholder="2020"
-                            min={1900}
-                            max={new Date().getFullYear()}
-                            value={form.founded_year}
-                            onChange={(e) => updateForm("founded_year", e.target.value)}
-                            className="pl-10"
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="employees">Employee Count</Label>
-                        <Select
-                          id="employees"
-                          value={form.employee_count}
-                          onChange={(e) => updateForm("employee_count", e.target.value)}
-                        >
-                          <option value="">Select range</option>
-                          {EMPLOYEE_COUNTS.map((c) => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="revenue">Revenue Range</Label>
-                      <Select
-                        id="revenue"
-                        value={form.revenue_range}
-                        onChange={(e) => updateForm("revenue_range", e.target.value)}
-                      >
-                        <option value="">Select range</option>
-                        {REVENUE_RANGES.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </Select>
-                    </div>
-                  </div>
+        {/* Step Card Content */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentStep}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.25 }}
+            className="rounded-xl bg-[#111522] border border-[#252A3A] p-6 sm:p-8 space-y-6"
+          >
+            {/* STEP 2: COMPANY DETAILS */}
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-[#F8FAFC] flex items-center gap-2">
+                    <Building2 className="text-[#4F46E5]" size={20} />
+                    Company Details
+                  </h2>
+                  <p className="text-xs text-[#A1A9B8] mt-1">
+                    Select your primary account category and enter basic company info.
+                  </p>
                 </div>
-              )}
 
-              {step === 2 && (
-                <div className="space-y-4">
-                  <CardHeader className="px-0 pt-0">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Briefcase size={16} className="text-primary" />
-                      Business Categories
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Select the categories that describe your business.
-                    </p>
-                  </CardHeader>
+                {/* Account Type Selection Cards */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-[#A1A9B8] uppercase tracking-wider">
+                    Select Account Type *
+                  </Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {ACCOUNT_TYPES.map((type) => {
+                      const isSelected = form.accountType === type.id;
+                      const IconComp = type.icon;
 
-                  {errors.category_ids && (
-                    <p className="text-xs text-destructive">{errors.category_ids}</p>
-                  )}
-
-                  {loadingCategories ? (
-                    <div className="text-center py-8 text-sm text-muted-foreground">Loading categories...</div>
-                  ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {categories.map((cat) => {
-                        const isSelected = form.category_ids.includes(cat.id);
-                        return (
-                          <button
-                            key={cat.id}
-                            type="button"
-                            onClick={() => toggleCategory(cat.id)}
-                            className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
-                              isSelected
-                                ? "border-primary bg-primary/10 shadow-[0_0_15px_rgba(108,92,231,0.15)]"
-                                : "border-border hover:border-primary/30 hover:bg-white/[0.02]"
-                            }`}
-                          >
-                            <div
-                              className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
-                                isSelected ? "bg-primary text-white" : "border border-border"
-                              }`}
-                            >
-                              {isSelected && <Check size={12} />}
-                            </div>
-                            <span className="text-sm text-foreground">{cat.name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {step === 3 && (
-                <div className="space-y-6">
-                  <CardHeader className="px-0 pt-0">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Package size={16} className="text-primary" />
-                      Products & Services
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      What does your company offer?
-                    </p>
-                  </CardHeader>
-
-                  <div className="space-y-3">
-                    <Label>Products</Label>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {form.products.map((p) => (
-                        <Badge key={p} variant="secondary" className="gap-1 pr-1">
-                          {p}
-                          <button onClick={() => removeProduct(p)} className="ml-1 rounded-full p-0.5 hover:bg-destructive/20">
-                            <X size={10} />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Add a product and press Enter..."
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addProduct((e.target as HTMLInputElement).value);
-                            (e.target as HTMLInputElement).value = "";
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label>Services</Label>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {form.services.map((s) => (
-                        <Badge key={s} variant="secondary" className="gap-1 pr-1">
-                          {s}
-                          <button onClick={() => removeService(s)} className="ml-1 rounded-full p-0.5 hover:bg-destructive/20">
-                            <X size={10} />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Add a service and press Enter..."
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addService((e.target as HTMLInputElement).value);
-                            (e.target as HTMLInputElement).value = "";
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {step === 4 && (
-                <div className="space-y-4">
-                  <CardHeader className="px-0 pt-0">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Globe size={16} className="text-primary" />
-                      Markets & Regions
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Where does your company operate?
-                    </p>
-                  </CardHeader>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {MARKET_OPTIONS.map((market) => {
-                      const isSelected = form.markets.includes(market);
                       return (
                         <button
-                          key={market}
+                          key={type.id}
                           type="button"
-                          onClick={() => toggleMarket(market)}
-                          className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
+                          onClick={() => updateField("accountType", type.id)}
+                          className={`flex flex-col justify-between p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
                             isSelected
-                              ? "border-secondary bg-secondary/10 shadow-[0_0_15px_rgba(0,210,255,0.15)]"
-                              : "border-border hover:border-secondary/30 hover:bg-white/[0.02]"
+                              ? "border-[#4F46E5] bg-[rgba(79,70,229,0.12)]"
+                              : "border-[#252A3A] bg-[#0D101C] hover:border-[#343B52] hover:bg-[#171B2B]"
                           }`}
                         >
-                          <div
-                            className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
-                              isSelected ? "bg-secondary text-secondary-foreground" : "border border-border"
-                            }`}
-                          >
-                            {isSelected && <Check size={12} />}
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <div
+                                className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                                  isSelected
+                                    ? "bg-[#4F46E5]/20 text-[#4F46E5]"
+                                    : "bg-[#171B2B] text-[#A1A9B8]"
+                                }`}
+                              >
+                                <IconComp size={18} />
+                              </div>
+                              {isSelected && <CheckCircle2 size={16} className="text-[#4F46E5]" />}
+                            </div>
+                            <h3 className="text-sm font-semibold text-[#F8FAFC] mb-1">
+                              {type.title}
+                            </h3>
+                            <p className="text-[11px] text-[#A1A9B8] leading-relaxed">
+                              {type.description}
+                            </p>
                           </div>
-                          <span className="text-sm text-foreground">{market}</span>
                         </button>
                       );
                     })}
                   </div>
                 </div>
-              )}
 
-              {step === 5 && (
-                <div className="space-y-4">
-                  <CardHeader className="px-0 pt-0 flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Shield size={16} className="text-primary" />
-                        Licenses
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Add any regulatory licenses (optional).
-                      </p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={addLicense} className="gap-1">
-                      <Plus size={14} /> Add
-                    </Button>
-                  </CardHeader>
-
-                  {form.licenses.length === 0 ? (
-                    <div className="text-center py-8 text-sm text-muted-foreground">
-                      No licenses added. You can add them later.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {form.licenses.map((lic) => (
-                        <div key={lic.id} className="rounded-lg border border-border/50 p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider">License</p>
-                            <button onClick={() => removeLicense(lic.id)} className="text-muted-foreground hover:text-destructive">
-                              <X size={14} />
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <Label className="text-xs">License Name</Label>
-                              <Input placeholder="MGA License" value={lic.license_name} onChange={(e) => updateLicense(lic.id, "license_name", e.target.value)} />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Jurisdiction</Label>
-                              <Input placeholder="Malta" value={lic.jurisdiction} onChange={(e) => updateLicense(lic.id, "jurisdiction", e.target.value)} />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <Label className="text-xs">License Number</Label>
-                              <Input placeholder="Optional" value={lic.license_number} onChange={(e) => updateLicense(lic.id, "license_number", e.target.value)} />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Status</Label>
-                              <Select value={lic.status} onChange={(e) => updateLicense(lic.id, "status", e.target.value)}>
-                                <option value="active">Active</option>
-                                <option value="pending">Pending</option>
-                                <option value="expired">Expired</option>
-                              </Select>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                {/* Company Name */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="companyName" className="text-xs font-semibold text-[#A1A9B8] uppercase tracking-wider">
+                      Company / Brand Name *
+                    </Label>
+                    <span className="text-[11px] text-[#6B7280] flex items-center gap-1">
+                      <Info size={12} /> Official trading name
+                    </span>
+                  </div>
+                  <Input
+                    id="companyName"
+                    placeholder="e.g. Apex Gaming Group"
+                    value={form.companyName}
+                    onChange={(e) => updateField("companyName", e.target.value)}
+                    className={`h-10 rounded-lg border-[#252A3A] bg-[#111522] text-xs sm:text-sm text-[#F8FAFC] placeholder:text-[#6B7280] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15 ${
+                      errors.companyName ? "border-[#EF4444]" : ""
+                    }`}
+                  />
+                  {errors.companyName && (
+                    <p className="text-xs text-[#EF4444] mt-1">{errors.companyName}</p>
                   )}
                 </div>
-              )}
 
-              {step === 6 && (
-                <div className="space-y-4">
-                  <CardHeader className="px-0 pt-0 flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Users size={16} className="text-primary" />
-                        Business Contacts
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Add key team members (optional).
-                      </p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={addContact} className="gap-1">
-                      <Plus size={14} /> Add
-                    </Button>
-                  </CardHeader>
-
-                  {form.contacts.length === 0 ? (
-                    <div className="text-center py-8 text-sm text-muted-foreground">
-                      No contacts added. You can add them later.
-                    </div>
+                {/* Website URL */}
+                <div className="space-y-2">
+                  <Label htmlFor="website" className="text-xs font-semibold text-[#A1A9B8] uppercase tracking-wider">
+                    Website URL
+                  </Label>
+                  <div className="relative">
+                    <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
+                    <Input
+                      id="website"
+                      placeholder="https://company.com"
+                      value={form.website}
+                      onChange={(e) => updateField("website", e.target.value)}
+                      className={`h-10 rounded-lg border-[#252A3A] bg-[#111522] pl-10 text-xs sm:text-sm text-[#F8FAFC] placeholder:text-[#6B7280] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15 ${
+                        errors.website ? "border-[#EF4444]" : ""
+                      }`}
+                    />
+                  </div>
+                  {errors.website ? (
+                    <p className="text-xs text-[#EF4444] mt-1">{errors.website}</p>
                   ) : (
-                    <div className="space-y-3">
-                      {form.contacts.map((contact) => (
-                        <div key={contact.id} className="rounded-lg border border-border/50 p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider">Contact</p>
-                            <button onClick={() => removeContact(contact.id)} className="text-muted-foreground hover:text-destructive">
-                              <X size={14} />
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <Label className="text-xs">Full Name</Label>
-                              <Input placeholder="John Doe" value={contact.full_name} onChange={(e) => updateContact(contact.id, "full_name", e.target.value)} />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Position</Label>
-                              <Input placeholder="CEO" value={contact.position} onChange={(e) => updateContact(contact.id, "position", e.target.value)} />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <Label className="text-xs">Email</Label>
-                              <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                                <Input placeholder="john@co.com" type="email" value={contact.email} onChange={(e) => updateContact(contact.id, "email", e.target.value)} className="pl-8" />
-                              </div>
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Phone</Label>
-                              <div className="relative">
-                                <Phone className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                                <Input placeholder="+1 234 567" value={contact.phone} onChange={(e) => updateContact(contact.id, "phone", e.target.value)} className="pl-8" />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-[11px] text-[#6B7280]">Accepted formats: https://domain.com or www.domain.com</p>
                   )}
                 </div>
-              )}
+              </div>
+            )}
 
-              {step === 7 && (
-                <div className="space-y-6">
-                  <CardHeader className="px-0 pt-0">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Check size={16} className="text-accent" />
-                      Review & Submit
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Review your information before submitting for verification.
+            {/* STEP 3: EVENT PREFERENCE */}
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-[#F8FAFC] flex items-center gap-2">
+                    <Calendar className="text-[#22C1DC]" size={20} />
+                    Event & Conference Preference
+                  </h2>
+                  <p className="text-xs text-[#A1A9B8] mt-1">
+                    Connect with partners attending upcoming major iGaming summits.
+                  </p>
+                </div>
+
+                {/* Featured Event Card */}
+                <div className="rounded-xl bg-[#0D101C] border border-[#252A3A] p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#22C1DC]/10 border border-[#22C1DC]/20 text-[11px] font-semibold text-[#22C1DC]">
+                      <Star size={12} className="fill-[#22C1DC]" /> Featured iGaming Summit
+                    </span>
+                    <span className="text-[11px] text-[#A1A9B8] flex items-center gap-1">
+                      <MapPin size={12} /> ExCeL London, UK
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="text-base font-bold text-[#F8FAFC]">
+                      iGB LIVE 2026 / NEXT.io London Summit
+                    </h3>
+                    <p className="text-xs text-[#A1A9B8] mt-1 leading-relaxed">
+                      Connect with over 10,000+ iGaming operators, affiliates, and technology providers worldwide.
                     </p>
-                  </CardHeader>
+                  </div>
 
-                  <div className="space-y-4">
-                    <div className="rounded-lg border border-border/50 p-4 space-y-2">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Company</p>
-                      <p className="text-sm font-medium text-foreground">{form.companyName || "Not set"}</p>
-                      <p className="text-xs text-muted-foreground">{form.description || "No description"}</p>
-                    </div>
-
-                    {form.category_ids.length > 0 && (
-                      <div className="rounded-lg border border-border/50 p-4 space-y-2">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Categories</p>
-                        <div className="flex flex-wrap gap-1">
-                          {form.category_ids.map((id) => {
-                            const cat = categories.find((c) => c.id === id);
-                            return cat ? <Badge key={id} variant="secondary">{cat.name}</Badge> : null;
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {(form.products.length > 0 || form.services.length > 0) && (
-                      <div className="rounded-lg border border-border/50 p-4 space-y-2">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Products & Services</p>
-                        <div className="flex flex-wrap gap-1">
-                          {form.products.map((p) => <Badge key={p} variant="outline">{p}</Badge>)}
-                          {form.services.map((s) => <Badge key={s} variant="outline">{s}</Badge>)}
-                        </div>
-                      </div>
-                    )}
-
-                    {form.markets.length > 0 && (
-                      <div className="rounded-lg border border-border/50 p-4 space-y-2">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Markets</p>
-                        <div className="flex flex-wrap gap-1">
-                          {form.markets.map((m) => <Badge key={m} variant="secondary">{m}</Badge>)}
-                        </div>
-                      </div>
-                    )}
-
-                    {form.licenses.length > 0 && (
-                      <div className="rounded-lg border border-border/50 p-4 space-y-2">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Licenses</p>
-                        {form.licenses.map((l) => (
-                          <div key={l.id} className="flex items-center justify-between text-sm">
-                            <span className="text-foreground">{l.license_name} - {l.jurisdiction}</span>
-                            <Badge variant={l.status === "active" ? "success" : "warning"}>{l.status}</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {form.contacts.length > 0 && (
-                      <div className="rounded-lg border border-border/50 p-4 space-y-2">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Contacts</p>
-                        {form.contacts.map((c) => (
-                          <div key={c.id} className="text-sm">
-                            <span className="text-foreground">{c.full_name}</span>
-                            <span className="text-muted-foreground ml-2">({c.position})</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
-                      <p className="text-sm text-foreground">
-                        Your profile will be reviewed by our team. This usually takes 1-2 business days.
-                        You&apos;ll receive a notification once your company is verified.
-                      </p>
+                  {/* Yes / No Segmented Control */}
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-xs font-semibold text-[#A1A9B8]">
+                      Are you attending this event?
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => updateField("attendEvent", false)}
+                        className={`py-2.5 px-4 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+                          !form.attendEvent
+                            ? "border-[#343B52] bg-[#171B2B] text-[#F8FAFC]"
+                            : "border-[#252A3A] bg-[#111522] text-[#A1A9B8] hover:bg-[#171B2B]"
+                        }`}
+                      >
+                        No
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateField("attendEvent", true)}
+                        className={`py-2.5 px-4 rounded-lg border text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          form.attendEvent
+                            ? "border-[#4F46E5] bg-[rgba(79,70,229,0.12)] text-[#F8FAFC]"
+                            : "border-[#252A3A] bg-[#111522] text-[#A1A9B8] hover:bg-[#171B2B]"
+                        }`}
+                      >
+                        <Check size={14} /> Yes, I&apos;m Attending
+                      </button>
                     </div>
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <div className="flex items-center justify-between mt-6">
-          <div className="flex gap-2">
-            {step > 0 && (
-              <Button variant="outline" onClick={handleBack} className="gap-2">
-                <ArrowLeft size={16} /> Back
-              </Button>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            {step > 0 && step < TOTAL_STEPS - 1 && (
-              <Button variant="ghost" onClick={handleSkip}>
-                Skip for now
-              </Button>
+              </div>
             )}
 
-            {step < TOTAL_STEPS - 1 ? (
-              <Button onClick={handleNext} className="gap-2">
-                {step === 0 ? "Get Started" : "Continue"} <ArrowRight size={16} />
-              </Button>
-            ) : (
-              <Button
-                variant="gradient"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="gap-2"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Submitting...
-                  </>
+            {/* STEP 4: CONTACT & PROFILE DETAILS */}
+            {currentStep === 4 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-[#F8FAFC] flex items-center gap-2">
+                    <Users className="text-[#4F46E5]" size={20} />
+                    Contact & Company Profile
+                  </h2>
+                  <p className="text-xs text-[#A1A9B8] mt-1">
+                    Provide brand graphics and messaging for your marketplace profile.
+                  </p>
+                </div>
+
+                {/* SECTION 1: COMPANY IDENTITY */}
+                <div className="space-y-3 rounded-xl bg-[#0D101C] border border-[#252A3A] p-4">
+                  <h3 className="text-xs font-semibold text-[#A1A9B8] uppercase tracking-wider">
+                    1. Company Identity & Logo
+                  </h3>
+                  <div className="flex items-center gap-4">
+                    {logoPreview ? (
+                      <div className="relative">
+                        <img
+                          src={logoPreview}
+                          alt="Logo Preview"
+                          className="h-16 w-16 rounded-lg object-cover border border-[#252A3A] bg-[#111522]"
+                        />
+                        <button
+                          onClick={removeLogo}
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-[#EF4444] text-white flex items-center justify-center cursor-pointer"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-16 w-16 rounded-lg bg-[#111522] border border-[#252A3A] flex items-center justify-center text-[#6B7280]">
+                        <ImageIcon size={24} />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#111522] hover:bg-[#171B2B] text-xs font-medium text-[#F8FAFC] cursor-pointer border border-[#252A3A] transition-colors">
+                        <Upload size={14} />
+                        <span>{logoPreview ? "Replace Logo" : "Upload Brand Logo"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <p className="text-[11px] text-[#6B7280] mt-1">Recommended: Square PNG/JPG, max 2MB</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION 2: CONTACT DETAILS */}
+                <div className="space-y-3 rounded-xl bg-[#0D101C] border border-[#252A3A] p-4">
+                  <h3 className="text-xs font-semibold text-[#A1A9B8] uppercase tracking-wider">
+                    2. Contact Details
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs text-[#A1A9B8] mb-1 block">Contact Email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#6B7280]" />
+                        <Input
+                          placeholder="contact@company.com"
+                          value={form.contactEmail}
+                          onChange={(e) => updateField("contactEmail", e.target.value)}
+                          className="h-10 rounded-lg border-[#252A3A] bg-[#111522] pl-9 text-xs text-[#F8FAFC]"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-[#A1A9B8] mb-1 block">WhatsApp Number</Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#6B7280]" />
+                        <Input
+                          placeholder="+1 234 567 890"
+                          value={form.whatsapp}
+                          onChange={(e) => updateField("whatsapp", e.target.value)}
+                          className="h-10 rounded-lg border-[#252A3A] bg-[#111522] pl-9 text-xs text-[#F8FAFC]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-[#A1A9B8] mb-1 block">Telegram Handle</Label>
+                    <div className="relative">
+                      <Send className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#6B7280]" />
+                      <Input
+                        placeholder="@username"
+                        value={form.telegram}
+                        onChange={(e) => updateField("telegram", e.target.value)}
+                        className="h-10 rounded-lg border-[#252A3A] bg-[#111522] pl-9 text-xs text-[#F8FAFC]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION 3: ABOUT COMPANY */}
+                <div className="space-y-2 rounded-xl bg-[#0D101C] border border-[#252A3A] p-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold text-[#A1A9B8] uppercase tracking-wider">
+                      3. About Your Company
+                    </h3>
+                    <span className="text-[11px] text-[#6B7280]">
+                      {form.aboutCompany.length}/500
+                    </span>
+                  </div>
+                  <Textarea
+                    placeholder="Briefly describe your products, target markets, or key partnership opportunities..."
+                    value={form.aboutCompany}
+                    maxLength={500}
+                    onChange={(e) => updateField("aboutCompany", e.target.value)}
+                    rows={3}
+                    className="rounded-lg border-[#252A3A] bg-[#111522] text-xs text-[#F8FAFC] placeholder:text-[#6B7280] focus:border-[#4F46E5]"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* STEP 5: REVIEW & COMPLETE */}
+            {currentStep === 5 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-[#F8FAFC] flex items-center gap-2">
+                    <CheckCircle2 className="text-[#22C1DC]" size={20} />
+                    Review & Complete
+                  </h2>
+                  <p className="text-xs text-[#A1A9B8] mt-1">
+                    Verify your company information before publishing to the Marketplace.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-[#252A3A] bg-[#0D101C] p-4 space-y-1">
+                    <span className="text-[11px] font-semibold uppercase text-[#6B7280]">Company Name</span>
+                    <p className="text-sm font-semibold text-[#F8FAFC]">{form.companyName || "My iGaming Company"}</p>
+                    {form.website && <p className="text-xs text-[#4F46E5]">{form.website}</p>}
+                  </div>
+
+                  <div className="rounded-lg border border-[#252A3A] bg-[#0D101C] p-4 space-y-1">
+                    <span className="text-[11px] font-semibold uppercase text-[#6B7280]">Account Type</span>
+                    <p className="text-xs font-medium text-[#F8FAFC] capitalize">{form.accountType}</p>
+                  </div>
+
+                  {form.attendEvent && (
+                    <div className="rounded-lg border border-[rgba(79,70,229,0.20)] bg-[rgba(79,70,229,0.12)] p-4">
+                      <span className="text-xs font-semibold text-[#F8FAFC] flex items-center gap-1.5">
+                        <Check size={14} className="text-[#4F46E5]" /> Registered for {form.eventChoice}
+                      </span>
+                    </div>
+                  )}
+
+                  {form.aboutCompany && (
+                    <div className="rounded-lg border border-[#252A3A] bg-[#0D101C] p-4 space-y-1">
+                      <span className="text-[11px] font-semibold uppercase text-[#6B7280]">About</span>
+                      <p className="text-xs text-[#A1A9B8] leading-relaxed">{form.aboutCompany}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Navigation Bar */}
+            <div className="flex items-center justify-between pt-4 border-t border-[#252A3A]">
+              {currentStep > 2 ? (
+                <Button
+                  variant="outline"
+                  onClick={handleBack}
+                  className="rounded-lg border-[#252A3A] bg-[#111522] text-[#F8FAFC] hover:bg-[#171B2B] hover:border-[#343B52] text-xs gap-1.5"
+                >
+                  <ArrowLeft size={14} /> Back
+                </Button>
+              ) : <div />}
+
+              <div className="flex gap-2">
+                {currentStep < 5 ? (
+                  <Button
+                    onClick={handleNext}
+                    className="rounded-lg bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-semibold px-5 gap-1.5"
+                  >
+                    <span>Continue</span>
+                    <ArrowRight size={14} />
+                  </Button>
                 ) : (
-                  <>
-                    <Check size={16} />
-                    Submit for Verification
-                  </>
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                    className="rounded-lg bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold px-6 gap-2"
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 size={15} className="animate-spin" />
+                        <span>Launching...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check size={15} />
+                        <span>Complete Setup & Launch</span>
+                      </>
+                    )}
+                  </Button>
                 )}
-              </Button>
-            )}
-          </div>
-        </div>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
 }
+
+

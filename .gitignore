@@ -38,7 +38,8 @@ yarn-error.log*
 
 # database
 *.db*
-*.sqlite3
+*.sqlite*
+scratch/
 
 # typescript
 *.tsbuildinfo

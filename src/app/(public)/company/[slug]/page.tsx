@@ -12,107 +12,88 @@ import {
   ExternalLink,
   ArrowLeft,
   Shield,
-  Package,
-  Briefcase,
-  FileCheck,
   MapPin,
-  Star,
+  Layers,
+  Share2,
+  ShieldCheck,
+  CheckCircle2,
+  Sparkles,
 } from "lucide-react";
-import { cn, getInitials } from "@/lib/utils";
+import { getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import ContactMasked from "@/components/marketplace/contact-masked";
 import { apiClient } from "@/lib/api-client";
 
-interface License {
-  name: string;
-  jurisdiction: string;
-  status: "active" | "pending" | "expired";
-  number?: string;
+const FLAG_MAP: Record<string, string> = {
+  MT: "🇲🇹", GB: "🇬🇧", US: "🇺🇸", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸", SE: "🇸🇪", NO: "🇳🇴",
+  FI: "🇫🇮", DK: "🇩🇰", NL: "🇳🇱", IE: "🇮🇪", EE: "🇪🇪", LV: "🇱🇻", LT: "🇱🇹", RO: "🇷🇴", BG: "🇧🇬",
+  HR: "🇭🇷", GR: "🇬🇷", CY: "🇨🇾", GI: "🇬🇮", JE: "🇯🇪", IM: "🇮🇲", IS: "🇮🇸", CH: "🇨🇭", AT: "🇦🇹",
+  PL: "🇵🇱", CZ: "🇨🇿", UA: "🇺🇦", IN: "🇮🇳", JP: "🇯🇵", AU: "🇦🇺", CA: "🇨🇦", BR: "🇧🇷", MX: "🇲🇽",
+  ZA: "🇿🇦", NG: "🇳🇬", KE: "🇰🇪", SG: "🇸🇬", PH: "🇵🇭", KR: "🇰🇷", CN: "🇨🇳", PT: "🇵🇹",
+};
+
+function getFlag(code?: string): string {
+  if (!code) return "🌐";
+  const upper = code.toUpperCase();
+  if (FLAG_MAP[upper]) return FLAG_MAP[upper];
+  if (code.length === 2) {
+    const codePoints = upper.split("").map((c) => 127397 + c.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+  }
+  return "🌐";
 }
 
-interface TeamMember {
-  name: string;
-  title: string;
-  email: string;
-  phone?: string;
-  is_revealed: boolean;
+function normalizeList(val: any): { id: string; name: string; slug?: string; code?: string; is_top?: number }[] {
+  if (!val) return [];
+  if (Array.isArray(val)) {
+    return val.map((item, idx) => {
+      if (typeof item === "string") {
+        return { id: String(idx), name: item };
+      }
+      if (typeof item === "object" && item !== null) {
+        return {
+          id: item.id || item.slug || String(idx),
+          name: item.name || item.label || item.license_name || String(item),
+          slug: item.slug,
+          code: item.code,
+          is_top: item.is_top,
+        };
+      }
+      return { id: String(idx), name: String(item) };
+    });
+  }
+  if (typeof val === "string" && val.trim()) {
+    return val
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((item, idx) => ({ id: String(idx), name: item }));
+  }
+  return [];
 }
 
-interface Product {
-  name: string;
-  description: string;
-  category: string;
-}
-
-interface Service {
-  name: string;
-  description: string;
-}
-
-interface Company {
-  name: string;
-  slug: string;
-  logo_url?: string | null;
-  description?: string | null;
-  website?: string | null;
-  country?: string | { name?: string; code?: string } | null;
-  founded_year?: number | null;
-  market?: string | null;
-  employee_count?: string | null;
-  categories?: string[];
-  is_verified?: boolean;
-  is_featured?: boolean;
-  products?: Product[];
-  services?: Service[];
-  licenses?: License[];
-  team?: TeamMember[];
-}
-
-function getCountryName(c?: string | { name?: string; code?: string } | null): string {
-  if (!c) return "";
-  if (typeof c === "string") return c;
-  return c.name || c.code || "";
-}
-
-export default function CompanyProfilePage({
+export default function PublicCompanyProfilePage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const [company, setCompany] = useState<Company | null>(null);
+  const [company, setCompany] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchCompany() {
       try {
-        const json = await apiClient.get<any>(`/api/v1/companies/${slug}/`);
+        let json: any = null;
+        try {
+          const res = await fetch(`/api/companies/${encodeURIComponent(slug)}`);
+          if (res.ok) json = await res.json();
+        } catch {}
+
         if (json) {
-          // Normalize Django detail response for company profile UI
-          const normalized = {
-            ...json,
-            country: json.country_detail?.name || json.country_detail?.code || json.country || "",
-            categories: json.categories_detail ? json.categories_detail.map((c: any) => c.name) : json.categories || [],
-            products: json.products_detail || json.products || [],
-            services: json.services_detail || json.services || [],
-            licenses: json.licenses ? json.licenses.map((l: any) => ({
-              name: l.license_name || l.name,
-              jurisdiction: l.jurisdiction,
-              status: l.status,
-              number: l.license_number || l.number,
-            })) : [],
-            team: json.contacts ? json.contacts.map((c: any) => ({
-              name: c.full_name,
-              title: c.position,
-              email: c.email,
-              phone: c.phone,
-              is_revealed: !c.email.includes("***"),
-            })) : json.team || [],
-          };
-          setCompany(normalized);
+          const compObj = json.company ?? json;
+          setCompany(compObj);
         }
       } catch {
         // silent
@@ -123,40 +104,16 @@ export default function CompanyProfilePage({
     fetchCompany();
   }, [slug]);
 
-  const handleReveal = (email: string) => {
-    // reveal contact logic
-    console.log("Reveal contact:", email);
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-          <Skeleton className="h-6 w-32 mb-8" />
-          <div className="grid lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-              <div className="glass-card p-8">
-                <div className="flex items-center gap-4 mb-6">
-                  <Skeleton className="w-20 h-20 rounded-xl" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-7 w-48" />
-                    <Skeleton className="h-4 w-32" />
-                  </div>
-                </div>
-                <Skeleton className="h-4 w-full mb-2" />
-                <Skeleton className="h-4 w-3/4" />
-              </div>
-              <div className="glass-card p-8 space-y-4">
-                <Skeleton className="h-6 w-24" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-5/6" />
-              </div>
-            </div>
-            <div className="space-y-4">
-              <Skeleton className="glass-card h-48" />
-              <Skeleton className="glass-card h-32" />
-            </div>
+      <div className="min-h-screen max-w-7xl mx-auto px-4 py-12 space-y-6">
+        <Skeleton className="h-6 w-32 bg-slate-800" />
+        <div className="grid lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-6">
+            <Skeleton className="h-64 w-full rounded-2xl bg-slate-800" />
+            <Skeleton className="h-48 w-full rounded-2xl bg-slate-800" />
           </div>
+          <Skeleton className="h-80 w-full rounded-2xl bg-slate-800" />
         </div>
       </div>
     );
@@ -164,400 +121,265 @@ export default function CompanyProfilePage({
 
   if (!company) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Building2 size={48} className="mx-auto mb-4 text-muted-foreground" />
-          <h1 className="text-2xl font-bold mb-2">Company Not Found</h1>
-          <p className="text-muted-foreground mb-6">
-            The company you&apos;re looking for doesn&apos;t exist or has been removed.
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center bg-[#111827]/50 p-8 rounded-3xl border border-white/10 max-w-md w-full">
+          <Building2 size={48} className="mx-auto mb-4 text-slate-500" />
+          <h1 className="text-2xl font-bold text-white mb-2">Company Not Found</h1>
+          <p className="text-slate-400 text-sm mb-6">
+            The requested company listing is unavailable or does not exist.
           </p>
           <Link href="/marketplace">
-            <Button>Browse Marketplace</Button>
+            <Button className="bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold w-full">
+              Browse Marketplace
+            </Button>
           </Link>
         </div>
       </div>
     );
   }
 
-  const countryName = getCountryName(company.country);
+  const isVerifiedBool = Boolean(company.is_verified);
+  const categoriesList = normalizeList(company.categories || company.category);
+  const primaryCategory = categoriesList.length > 0 ? categoriesList[0].name : null;
+  const topGeos = normalizeList(company.topGeos || company.top_geos);
+  const allGeos = normalizeList(company.allGeos || company.all_geos || company.geos);
+  const softwareTypes = normalizeList(company.softwareTypes || company.software_types || company.products || company.company_products);
+  const serviceTypes = normalizeList(company.serviceTypes || company.service_types || company.services || company.company_services);
+  const licenses = normalizeList(company.licenses || company.company_licenses || company.license_links);
+  const countryObj = company.country;
+  const countryName = typeof countryObj === "string" ? countryObj : countryObj?.name || countryObj?.code || company.headquarters || "";
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen pb-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <Link
           href="/marketplace"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+          className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
         >
           <ArrowLeft size={16} />
           Back to Marketplace
         </Link>
 
         <div className="grid lg:grid-cols-3 gap-8">
+          {/* Main Column */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Header Hero */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="glass-card p-8"
             >
-              <div className="flex items-start gap-5">
-                {company.logo_url ? (
-                  <img
-                    src={company.logo_url}
-                    alt={company.name}
-                    className="w-20 h-20 rounded-xl object-cover border border-glass-border"
-                  />
-                ) : (
-                  <div className="w-20 h-20 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-2xl font-bold">
-                    {getInitials(company.name)}
-                  </div>
-                )}
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h1 className="text-2xl font-bold text-foreground">
-                      {company.name}
-                    </h1>
-                    {company.is_verified && (
-                      <BadgeCheck size={22} className="text-accent" />
-                    )}
-                  </div>
-                  {countryName && (
-                    <p className="text-sm text-muted-foreground flex items-center gap-1.5 mb-3">
-                      <MapPin size={14} />
-                      {countryName}
-                    </p>
+              <Card className="border border-white/10 bg-[#111827] p-6 sm:p-8 rounded-2xl shadow-xl space-y-6">
+                <div className="flex items-start gap-5">
+                  {company.logo_url ? (
+                    <img
+                      src={company.logo_url}
+                      alt={company.name}
+                      className="w-20 h-20 rounded-2xl object-cover border border-white/15 bg-[#080C16] shrink-0"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#4F6BFF] via-[#3B54E6] to-[#60A5FA] border border-white/20 flex items-center justify-center text-white text-2xl font-black shrink-0">
+                      {getInitials(company.name)}
+                    </div>
                   )}
-                  {company.website && (
-                    <a
-                      href={company.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
-                    >
-                      <Globe size={14} />
-                      {company.website.replace(/^https?:\/\//, "")}
-                      <ExternalLink size={12} />
-                    </a>
-                  )}
-                </div>
-              </div>
 
-              {company.description && (
-                <p className="mt-6 text-muted-foreground leading-relaxed">
-                  {company.description}
-                </p>
-              )}
-
-              {company.categories && company.categories.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {company.categories.map((cat) => (
-                    <Badge key={cat} variant="default">
-                      {cat}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-            >
-              <Tabs defaultValue="overview">
-                <TabsList>
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="products">Products</TabsTrigger>
-                  <TabsTrigger value="services">Services</TabsTrigger>
-                  <TabsTrigger value="licenses">Licenses</TabsTrigger>
-                  <TabsTrigger value="team">Team</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview" className="glass-card p-6 mt-4">
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground mb-3">
-                        About
-                      </h3>
-                      <p className="text-muted-foreground leading-relaxed">
-                        {company.description || "No description available."}
-                      </p>
+                  <div className="space-y-1.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                        {company.name}
+                      </h1>
+                      {isVerifiedBool && (
+                        <span className="inline-flex items-center gap-1 text-xs font-black px-2.5 py-0.5 rounded-full bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30">
+                          <BadgeCheck size={14} />
+                          Trusted Member
+                        </span>
+                      )}
                     </div>
 
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      {company.market && (
-                        <div className="glass-card p-4">
-                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">
-                            Market
-                          </p>
-                          <p className="text-sm font-medium text-foreground">
-                            {company.market}
-                          </p>
-                        </div>
-                      )}
-                      {company.employee_count && (
-                        <div className="glass-card p-4">
-                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">
-                            Team Size
-                          </p>
-                          <p className="text-sm font-medium text-foreground">
-                            {company.employee_count}
-                          </p>
-                        </div>
-                      )}
-                      {company.founded_year && (
-                        <div className="glass-card p-4">
-                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">
-                            Founded
-                          </p>
-                          <p className="text-sm font-medium text-foreground">
-                            {company.founded_year}
-                          </p>
-                        </div>
+                    {primaryCategory && (
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {categoriesList.map((cat: any, i: number) => (
+                          <span key={i} className="inline-flex items-center text-[11px] font-extrabold px-3 py-1 rounded-xl bg-[#4F6BFF]/15 text-[#60A5FA] border border-[#4F6BFF]/30">
+                            {typeof cat === "string" ? cat : cat.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-300 pt-1">
+                      {company.website && (
+                        <a
+                          href={company.website.startsWith("http") ? company.website : `https://${company.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-[#60A5FA] hover:underline font-semibold"
+                        >
+                          <Globe size={13} />
+                          <span>{company.website.replace(/^https?:\/\//, "")}</span>
+                          <ExternalLink size={11} />
+                        </a>
                       )}
                       {countryName && (
-                        <div className="glass-card p-4">
-                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">
-                            Headquarters
-                          </p>
-                          <p className="text-sm font-medium text-foreground">
-                            {countryName}
-                          </p>
-                        </div>
+                        <span className="flex items-center gap-1">
+                          <MapPin size={13} className="text-slate-400" />
+                          <span>{countryName}</span>
+                        </span>
+                      )}
+                      {company.employee_count && (
+                        <span className="flex items-center gap-1">
+                          <Users size={13} className="text-slate-400" />
+                          <span>{company.employee_count}</span>
+                        </span>
                       )}
                     </div>
                   </div>
-                </TabsContent>
+                </div>
 
-                <TabsContent value="products" className="glass-card p-6 mt-4">
-                  {company.products && company.products.length > 0 ? (
-                    <div className="space-y-4">
-                      {company.products.map((product, i) => (
-                        <div
-                          key={i}
-                          className="glass-card p-4 border border-glass-border"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                              <Package size={14} className="text-primary" />
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-semibold text-foreground">
-                                {product.name}
-                              </h4>
-                              {product.category && (
-                                <Badge variant="secondary" className="mt-1 text-[10px]">
-                                  {product.category}
-                                </Badge>
-                              )}
-                              {product.description && (
-                                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                                  {product.description}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      No products listed yet.
-                    </p>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="services" className="glass-card p-6 mt-4">
-                  {company.services && company.services.length > 0 ? (
-                    <div className="space-y-4">
-                      {company.services.map((service, i) => (
-                        <div
-                          key={i}
-                          className="glass-card p-4 border border-glass-border"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-secondary/10 border border-secondary/20 flex items-center justify-center flex-shrink-0">
-                              <Briefcase size={14} className="text-secondary" />
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-semibold text-foreground">
-                                {service.name}
-                              </h4>
-                              {service.description && (
-                                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                                  {service.description}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      No services listed yet.
-                    </p>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="licenses" className="glass-card p-6 mt-4">
-                  {company.licenses && company.licenses.length > 0 ? (
-                    <div className="space-y-3">
-                      {company.licenses.map((license, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between p-4 glass-card border border-glass-border"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center">
-                              <FileCheck size={14} className="text-accent" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-foreground">
-                                {license.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {license.jurisdiction}
-                                {license.number && ` - ${license.number}`}
-                              </p>
-                            </div>
-                          </div>
-                          <Badge
-                            variant={
-                              license.status === "active"
-                                ? "success"
-                                : license.status === "pending"
-                                ? "warning"
-                                : "destructive"
-                            }
-                          >
-                            {license.status}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      No licenses listed yet.
-                    </p>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="team" className="glass-card p-6 mt-4">
-                  {company.team && company.team.length > 0 ? (
-                    <div className="space-y-3">
-                      {company.team.map((member, i) => (
-                        <div key={i} className="glass-card p-4 border border-glass-border">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-sm font-bold">
-                              {getInitials(member.name)}
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">
-                                {member.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {member.title}
-                              </p>
-                            </div>
-                          </div>
-                          <ContactMasked
-                            email={member.email}
-                            phone={member.phone}
-                            is_revealed={member.is_revealed}
-                            onReveal={() => handleReveal(member.email)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      No team members listed yet.
-                    </p>
-                  )}
-                </TabsContent>
-              </Tabs>
+                {company.description && (
+                  <p className="text-sm text-slate-300 leading-relaxed border-t border-white/[0.06] pt-4">
+                    {company.description}
+                  </p>
+                )}
+              </Card>
             </motion.div>
+
+            {/* Overview Card */}
+            <Card className="border border-white/10 bg-[#111827] p-6 rounded-2xl space-y-6">
+              <h3 className="text-base font-bold text-white flex items-center gap-2 border-b border-white/[0.06] pb-3">
+                <Building2 size={18} className="text-[#60A5FA]" />
+                Company Overview
+              </h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                {company.description || "No description provided."}
+              </p>
+
+              <div className="space-y-2 pt-2 border-t border-white/[0.04]">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+                  Top GEOs
+                </h4>
+                {topGeos.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {topGeos.map((geo: any, i: number) => (
+                      <span key={i} className="inline-flex items-center gap-2 rounded-xl bg-[#4F6BFF]/20 border border-[#4F6BFF]/40 px-3.5 py-1.5 text-xs font-bold text-white">
+                        <span>{getFlag(geo.code)}</span>
+                        <span>{geo.name}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">No GEOs added yet</p>
+                )}
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-white/[0.04]">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+                  Operating GEOs ({allGeos.length})
+                </h4>
+                {allGeos.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {allGeos.map((geo: any, i: number) => (
+                      <span key={i} className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-1 text-xs text-slate-200">
+                        <span>{getFlag(geo.code)}</span>
+                        <span>{geo.name}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">No GEOs added yet</p>
+                )}
+              </div>
+            </Card>
+
+            {/* Software Types Card */}
+            <Card className="border border-white/10 bg-[#111827] p-6 rounded-2xl space-y-4 shadow-xl">
+              <h3 className="text-base font-bold text-white flex items-center gap-2 border-b border-white/[0.06] pb-3">
+                <Layers size={18} className="text-[#60A5FA]" />
+                Software Solutions
+              </h3>
+              {softwareTypes.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {softwareTypes.map((st: any, i: number) => (
+                    <div key={i} className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 text-xs font-bold text-white">
+                      {st.name}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-4 text-center rounded-xl bg-white/[0.02] border border-white/[0.04] text-xs font-semibold text-slate-400 italic">
+                  No software solutions listed
+                </div>
+              )}
+            </Card>
+
+            {/* Services Offered Card */}
+            <Card className="border border-white/10 bg-[#111827] p-6 rounded-2xl space-y-4 shadow-xl">
+              <h3 className="text-base font-bold text-white flex items-center gap-2 border-b border-white/[0.06] pb-3">
+                <Share2 size={18} className="text-[#60A5FA]" />
+                Services Offered
+              </h3>
+              {serviceTypes.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {serviceTypes.map((st: any, i: number) => (
+                    <div key={i} className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 text-xs font-bold text-white flex items-center gap-2">
+                      <CheckCircle2 size={14} className="text-[#10B981]" />
+                      <span>{st.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-4 text-center rounded-xl bg-white/[0.02] border border-white/[0.04] text-xs font-semibold text-slate-400 italic">
+                  No services listed
+                </div>
+              )}
+            </Card>
+
+            {/* Licenses Card */}
+            <Card className="border border-white/10 bg-[#111827] p-6 rounded-2xl space-y-4 shadow-xl">
+              <h3 className="text-base font-bold text-white flex items-center gap-2 border-b border-white/[0.06] pb-3">
+                <Shield size={18} className="text-[#10B981]" />
+                Gaming Licenses
+              </h3>
+              {licenses.length > 0 ? (
+                <div className="space-y-2.5">
+                  {licenses.map((lic: any, i: number) => (
+                    <div key={i} className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <ShieldCheck size={20} className="text-[#10B981]" />
+                        <div>
+                          <p className="text-sm font-bold text-white">{lic.license_name || lic.name}</p>
+                          <p className="text-xs text-slate-400">{lic.jurisdiction || "Global"}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-[#10B981]">● {lic.status || "Active"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-4 text-center rounded-xl bg-white/[0.02] border border-white/[0.04] text-xs font-semibold text-slate-400 italic">
+                  No licenses added
+                </div>
+              )}
+            </Card>
           </div>
 
-          <motion.aside
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            className="space-y-4"
-          >
-            <div className="glass-card p-6 space-y-4">
-              <h3 className="text-sm font-semibold text-foreground">
-                Company Info
-              </h3>
-              <div className="space-y-3">
-                {countryName && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <MapPin size={14} className="text-muted-foreground" />
-                    <span className="text-muted-foreground">{countryName}</span>
-                  </div>
-                )}
-                {company.founded_year && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Calendar size={14} className="text-muted-foreground" />
-                    <span className="text-muted-foreground">
-                      Founded {company.founded_year}
-                    </span>
-                  </div>
-                )}
-                {company.market && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Globe size={14} className="text-muted-foreground" />
-                    <span className="text-muted-foreground">{company.market}</span>
-                  </div>
-                )}
-                {company.employee_count && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Users size={14} className="text-muted-foreground" />
-                    <span className="text-muted-foreground">
-                      {company.employee_count}
-                    </span>
-                  </div>
-                )}
-                {company.is_verified && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Shield size={14} className="text-accent" />
-                    <span className="text-accent">Verified Company</span>
-                  </div>
-                )}
-                {company.is_featured && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Star size={14} className="text-yellow-400" />
-                    <span className="text-yellow-400">Featured</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="glass-card p-6 space-y-3">
-              <Button className="w-full" size="lg">
-                Request Introduction
-              </Button>
-              <Button variant="outline" className="w-full" size="lg">
-                Save Company
-              </Button>
-            </div>
-
-            {company.website && (
-              <div className="glass-card p-6">
-                <a
-                  href={company.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
-                >
-                  <Globe size={14} />
-                  Visit Website
-                  <ExternalLink size={12} />
-                </a>
-              </div>
-            )}
-          </motion.aside>
+          {/* Right Sidebar */}
+          <div className="space-y-6">
+            <Card className="border border-white/10 bg-[#111827] p-6 rounded-2xl space-y-4">
+              <h3 className="text-sm font-bold text-white">Connect with {company.name}</h3>
+              <p className="text-xs text-slate-400">
+                Register or log in to contact this verified iGaming partner directly.
+              </p>
+              <Link href="/register" className="block">
+                <Button className="w-full bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold rounded-xl">
+                  Sign Up to Connect
+                </Button>
+              </Link>
+              <Link href="/login" className="block">
+                <Button variant="outline" className="w-full border-white/15 text-white hover:bg-white/10 rounded-xl">
+                  Log In
+                </Button>
+              </Link>
+            </Card>
+          </div>
         </div>
       </div>
     </div>

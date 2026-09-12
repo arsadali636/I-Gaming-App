@@ -75,17 +75,14 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <section className="py-20 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-        <div className="absolute top-1/3 left-1/4 w-[400px] h-[400px] bg-primary/5 rounded-full blur-[120px]" />
-
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div {...fadeUp} className="text-center mb-16">
-            <h1 className="text-4xl sm:text-5xl font-bold mb-4">
-              Get in <span className="gradient-text">Touch</span>
+            <h1 className="text-4xl sm:text-5xl font-bold mb-4 text-text-primary">
+              Get in <span className="text-primary">Touch</span>
             </h1>
-            <p className="text-lg text-muted-foreground max-w-xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-xl mx-auto">
               Have a question or want to discuss a partnership? We&apos;d love to
               hear from you.
             </p>
@@ -96,16 +93,16 @@ export default function ContactPage() {
               {...fadeUp}
               className="lg:col-span-3"
             >
-              <div className="glass-card p-8">
+              <div className="bg-surface border border-border rounded-xl p-8">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
                     <MessageSquare size={18} className="text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-foreground">
+                    <h2 className="text-lg font-bold text-text-primary">
                       Send us a message
                     </h2>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-text-muted">
                       We&apos;ll respond within 24 hours
                     </p>
                   </div>
@@ -118,10 +115,10 @@ export default function ContactPage() {
                     className="flex flex-col items-center justify-center py-16 text-center"
                   >
                     <CheckCircle size={48} className="text-accent mb-4" />
-                    <h3 className="text-xl font-bold text-foreground mb-2">
+                    <h3 className="text-xl font-bold text-text-primary mb-2">
                       Message Sent!
                     </h3>
-                    <p className="text-sm text-muted-foreground max-w-sm">
+                    <p className="text-sm text-text-secondary max-w-sm">
                       Thank you for reaching out. Our team will get back to you
                       shortly.
                     </p>
@@ -147,7 +144,7 @@ export default function ContactPage() {
                   <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="grid sm:grid-cols-2 gap-5">
                       <div className="space-y-2">
-                        <Label htmlFor="name">Name</Label>
+                        <Label htmlFor="name" className="text-text-primary">Name</Label>
                         <Input
                           id="name"
                           name="name"
@@ -155,10 +152,11 @@ export default function ContactPage() {
                           value={formState.name}
                           onChange={handleChange}
                           required
+                          className="bg-surface border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary/20"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
+                        <Label htmlFor="email" className="text-text-primary">Email</Label>
                         <Input
                           id="email"
                           name="email"
@@ -167,23 +165,25 @@ export default function ContactPage() {
                           value={formState.email}
                           onChange={handleChange}
                           required
+                          className="bg-surface border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary/20"
                         />
                       </div>
                     </div>
 
                     <div className="grid sm:grid-cols-2 gap-5">
                       <div className="space-y-2">
-                        <Label htmlFor="company">Company</Label>
+                        <Label htmlFor="company" className="text-text-primary">Company</Label>
                         <Input
                           id="company"
                           name="company"
                           placeholder="Your company name"
                           value={formState.company}
                           onChange={handleChange}
+                          className="bg-surface border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary/20"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="subject">Subject</Label>
+                        <Label htmlFor="subject" className="text-text-primary">Subject</Label>
                         <Input
                           id="subject"
                           name="subject"
@@ -191,12 +191,13 @@ export default function ContactPage() {
                           value={formState.subject}
                           onChange={handleChange}
                           required
+                          className="bg-surface border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary/20"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="message">Message</Label>
+                      <Label htmlFor="message" className="text-text-primary">Message</Label>
                       <Textarea
                         id="message"
                         name="message"
@@ -205,13 +206,14 @@ export default function ContactPage() {
                         value={formState.message}
                         onChange={handleChange}
                         required
+                        className="bg-surface border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary/20"
                       />
                     </div>
 
                     <Button
                       type="submit"
                       size="lg"
-                      className="w-full bg-gradient-to-r from-primary to-secondary"
+                      className="w-full bg-primary hover:bg-primary-hover text-white"
                       disabled={sending}
                     >
                       {sending ? (

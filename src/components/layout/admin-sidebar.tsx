@@ -19,6 +19,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Newspaper,
+  Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -29,7 +31,14 @@ const adminLinks = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/companies", label: "Companies", icon: Building2 },
+  { href: "/admin/business-roles", label: "Business Roles", icon: Shield },
+  { href: "/admin/company-sizes", label: "Company Sizes", icon: Users },
   { href: "/admin/categories", label: "Categories", icon: Tag },
+  { href: "/admin/master-data", label: "Master Data", icon: Shield },
+  { href: "/admin/pricing", label: "Pricing Management", icon: DollarSign },
+  { href: "/admin/offers", label: "Offers Management", icon: Tag },
+  { href: "/admin/news", label: "News Management", icon: Newspaper },
+  { href: "/admin/events", label: "Events Management", icon: Calendar },
   { href: "/admin/verification", label: "Verification", icon: Shield },
   { href: "/admin/contact-reveals", label: "Contact Reveals", icon: Eye },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
@@ -50,35 +59,35 @@ export default function AdminSidebar() {
     <>
       <aside
         className={cn(
-          "fixed left-0 top-0 z-40 flex h-screen flex-col bg-[#060614]/90 backdrop-blur-xl border-r border-glass-border transition-all duration-300",
+          "fixed left-0 top-0 z-40 flex h-screen flex-col bg-[#0D101C] border-r border-[#252A3A] transition-all duration-200",
           sidebarOpen ? "w-64" : "w-[72px]"
         )}
       >
-        <div className="flex h-16 items-center justify-between border-b border-glass-border px-4">
+        <div className="flex h-16 items-center justify-between border-b border-[#252A3A] px-4">
           <Link
             href="/admin"
             className={cn(
-              "flex items-center gap-2 overflow-hidden transition-all",
+              "flex items-center gap-2.5 overflow-hidden transition-all",
               !sidebarOpen && "justify-center"
             )}
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-neon-pink to-neon-purple">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#4F46E5]">
               <span className="text-sm font-bold text-white">iG</span>
             </div>
             {sidebarOpen && (
               <div className="flex flex-col">
-                <span className="gradient-text text-lg font-bold tracking-tight whitespace-nowrap">
+                <span className="text-[#F8FAFC] text-lg font-bold tracking-tight whitespace-nowrap">
                   iGaming Connect
                 </span>
-                <span className="text-[10px] font-medium uppercase tracking-widest text-neon-pink">
-                  Admin
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[#22C1DC]">
+                  Admin Panel
                 </span>
               </div>
             )}
           </Link>
           <button
             onClick={toggleSidebar}
-            className="hidden rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground lg:flex"
+            className="hidden rounded-lg p-1.5 text-[#A1A9B8] transition-colors hover:bg-[#111522] hover:text-[#F8FAFC] lg:flex cursor-pointer"
             aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           >
             {sidebarOpen ? (
@@ -104,8 +113,8 @@ export default function AdminSidebar() {
                     className={cn(
                       "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                       isActive
-                        ? "bg-neon-pink/15 text-neon-pink shadow-[0_0_15px_rgba(255,107,157,0.15)]"
-                        : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                        ? "bg-[rgba(79,70,229,0.12)] text-[#F8FAFC] font-semibold"
+                        : "text-[#A1A9B8] hover:bg-[#111522] hover:text-[#F8FAFC]",
                       !sidebarOpen && "justify-center px-0"
                     )}
                     title={!sidebarOpen ? link.label : undefined}
@@ -114,8 +123,8 @@ export default function AdminSidebar() {
                       className={cn(
                         "h-5 w-5 shrink-0 transition-colors",
                         isActive
-                          ? "text-neon-pink"
-                          : "text-muted-foreground group-hover:text-foreground"
+                          ? "text-[#4F46E5]"
+                          : "text-[#A1A9B8] group-hover:text-[#F8FAFC]"
                       )}
                     />
                     {sidebarOpen && <span>{link.label}</span>}
@@ -126,14 +135,14 @@ export default function AdminSidebar() {
           </ul>
         </nav>
 
-        <div className="border-t border-glass-border p-3">
+        <div className="border-t border-[#252A3A] p-3 bg-[#090B14]">
           <div
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2",
               !sidebarOpen && "justify-center px-0"
             )}
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-neon-pink to-neon-purple text-xs font-semibold text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#171B2B] border border-[#252A3A] text-xs font-semibold text-[#4F46E5]">
               {user?.avatar_url ? (
                 <img
                   src={user.avatar_url}
@@ -148,10 +157,10 @@ export default function AdminSidebar() {
             </div>
             {sidebarOpen && (
               <div className="flex flex-1 flex-col overflow-hidden">
-                <span className="truncate text-sm font-medium text-foreground">
+                <span className="truncate text-sm font-medium text-[#F8FAFC]">
                   {user?.full_name ?? "Admin"}
                 </span>
-                <span className="truncate text-xs text-muted-foreground">
+                <span className="truncate text-xs text-[#A1A9B8]">
                   {user?.email ?? ""}
                 </span>
               </div>
@@ -160,7 +169,7 @@ export default function AdminSidebar() {
           {sidebarOpen && (
             <button
               onClick={logout}
-              className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-[#EF4444] transition-colors hover:bg-[#EF4444]/10 cursor-pointer"
             >
               <LogOut className="h-5 w-5" />
               <span>Sign Out</span>
@@ -171,10 +180,11 @@ export default function AdminSidebar() {
 
       <div
         className={cn(
-          "hidden lg:block shrink-0 transition-all duration-300",
+          "hidden lg:block shrink-0 transition-all duration-200",
           sidebarOpen ? "w-64" : "w-[72px]"
         )}
       />
     </>
   );
 }
+

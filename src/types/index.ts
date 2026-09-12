@@ -11,6 +11,25 @@ export interface User {
   updated_at: string;
 }
 
+export interface BusinessRole {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  icon?: string;
+  status: "active" | "inactive";
+  sort_order: number;
+}
+
+export interface CompanySize {
+  id: string;
+  label: string;
+  min_employees: number;
+  max_employees: number;
+  status: "active" | "inactive";
+  sort_order: number;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -24,6 +43,13 @@ export interface Company {
   market?: string;
   employee_count?: string;
   revenue_range?: string;
+  business_role_id?: string;
+  business_role?: BusinessRole;
+  company_size_id?: string;
+  company_size?: CompanySize | string;
+  city?: string;
+  state_region?: string;
+  marketplace_visibility?: "visible" | "hidden";
   status: "pending" | "approved" | "rejected" | "suspended";
   is_verified: boolean;
   is_featured: boolean;
@@ -31,6 +57,17 @@ export interface Company {
   created_by: string;
   created_at: string;
   updated_at: string;
+
+  // Optional relations and marketplace calculations
+  categories?: any[];
+  category_ids?: string[];
+  country?: any;
+  topGeos?: any[];
+  allGeos?: any[];
+  softwareTypes?: any[];
+  serviceTypes?: any[];
+  licenses?: any[];
+  completionPercentage?: number;
 }
 
 export interface Category {

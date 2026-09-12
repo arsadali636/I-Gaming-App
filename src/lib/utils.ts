@@ -64,3 +64,28 @@ export function calculateMatchScore(
   );
   return Math.round((intersection.length / Math.max(userInterests.length, companyTags.length)) * 100);
 }
+
+export function calculateProfileCompletion(
+  company?: Record<string, any> | null,
+  contactsCount = 0,
+  licensesCount = 0
+): number {
+  if (!company) return 0;
+  let score = 0;
+
+  // Essential registration fields (40%)
+  if (company.name?.trim()) score += 10;
+  if (company.business_role_id || company.business_role) score += 10;
+  if (company.company_size_id || company.company_size || company.employee_count) score += 10;
+  if (company.country_id || company.country) score += 10;
+
+  // Secondary details (60%)
+  if (company.city?.trim()) score += 10;
+  if (company.description && company.description.trim().length > 10) score += 15;
+  if (company.website?.trim()) score += 10;
+  if (company.logo_url?.trim()) score += 10;
+  if (contactsCount > 0) score += 10;
+  if (licensesCount > 0 || company.founded_year) score += 5;
+
+  return Math.min(100, score);
+}

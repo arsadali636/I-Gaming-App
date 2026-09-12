@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/utils";
+import { apiClient } from "@/lib/api-client";
 
 interface RevealedContact {
   id: string;
@@ -31,6 +32,7 @@ interface RevealedContact {
   phone?: string;
   company_name: string;
   company_id: string;
+  company_slug?: string;
   revealed_at: string;
   notes?: string;
 }
@@ -49,9 +51,8 @@ export default function ContactsPage() {
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
-      const res = await fetch(`/api/contacts/revealed?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
+      const data = await apiClient.get<any>(`/api/v1/contacts/reveal/?${params.toString()}`);
+      if (data) {
         setContacts(data.contacts ?? []);
       }
     } catch {} finally {
@@ -73,18 +74,13 @@ export default function ContactsPage() {
     if (!selectedContact) return;
     setSaving(true);
     try {
-      await fetch(`/api/contacts/${selectedContact.id}/notes`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notes: noteText }),
-      });
       setContacts((prev) =>
         prev.map((c) =>
           c.id === selectedContact.id ? { ...c, notes: noteText } : c
         )
       );
       setNoteDialogOpen(false);
-    } catch {} finally {
+    } finally {
       setSaving(false);
     }
   };

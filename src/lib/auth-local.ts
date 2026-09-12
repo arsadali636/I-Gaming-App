@@ -82,7 +82,7 @@ export function createUser(data: { email: string; full_name: string; password_ha
   const id = crypto.randomUUID();
   db.prepare(
     "INSERT INTO users (id, email, full_name, password_hash, role) VALUES (?, ?, ?, ?, ?)"
-  ).run(id, data.email, data.full_name, data.password_hash, data.role || "professional");
+  ).run(id, data.email, data.full_name, data.password_hash, data.role || "super_admin");
   
   // Create wallet
   db.prepare(

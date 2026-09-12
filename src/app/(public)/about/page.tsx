@@ -63,23 +63,19 @@ const fadeUp = {
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <section className="py-24 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-        <div className="absolute top-1/3 left-1/4 w-[400px] h-[400px] bg-primary/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] bg-secondary/5 rounded-full blur-[100px]" />
-
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div {...fadeUp} className="text-center max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass border border-primary/20 text-xs text-primary mb-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface border border-border text-xs text-primary mb-6">
               <Zap size={12} className="text-accent" />
               <span>Founded in 2024</span>
             </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight text-text-primary">
               Connecting the{" "}
-              <span className="gradient-text">iGaming Industry</span>
+              <span className="text-primary">iGaming Industry</span>
             </h1>
-            <p className="text-lg text-muted-foreground leading-relaxed">
+            <p className="text-lg text-text-secondary leading-relaxed">
               iGaming Connect is the premier B2B networking platform built
               exclusively for the iGaming industry. We bridge the gap between
               operators, providers, studios, and technology partners across the
@@ -89,19 +85,19 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="py-20 border-t border-glass-border">
+      <section className="py-20 border-t border-border bg-background-secondary/50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <motion.div {...fadeUp}>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass border border-secondary/20 text-xs text-secondary mb-4">
-                <Target size={12} />
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface border border-border text-xs text-text-secondary mb-4">
+                <Target size={12} className="text-primary" />
                 <span>Our Mission</span>
               </div>
-              <h2 className="text-3xl sm:text-4xl font-bold mb-6">
+              <h2 className="text-3xl sm:text-4xl font-bold mb-6 text-text-primary">
                 Empowering partnerships that{" "}
-                <span className="gradient-text">shape the future</span>
+                <span className="text-primary">shape the future</span>
               </h2>
-              <div className="space-y-4 text-muted-foreground leading-relaxed">
+              <div className="space-y-4 text-text-secondary leading-relaxed">
                 <p>
                   The iGaming industry is one of the fastest-growing sectors in
                   the world, yet finding the right business partners remains
@@ -128,9 +124,8 @@ export default function AboutPage() {
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="glass-card p-8 relative overflow-hidden"
+              className="bg-surface border border-border rounded-xl p-8 relative overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-secondary/5 to-accent/5" />
               <div className="relative z-10 grid grid-cols-2 gap-6">
                 {[
                   { value: "500+", label: "Companies" },
@@ -139,10 +134,10 @@ export default function AboutPage() {
                   { value: "98%", label: "Satisfaction Rate" },
                 ].map((stat, i) => (
                   <div key={i} className="text-center p-4">
-                    <div className="text-3xl font-bold gradient-text mb-1">
+                    <div className="text-3xl font-bold text-primary mb-1">
                       {stat.value}
                     </div>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-text-muted">
                       {stat.label}
                     </div>
                   </div>
@@ -153,13 +148,13 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="py-20 border-t border-glass-border">
+      <section className="py-20 border-t border-border">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <motion.div {...fadeUp} className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              Our <span className="gradient-text">Values</span>
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-text-primary">
+              Our <span className="text-primary">Values</span>
             </h2>
-            <p className="text-muted-foreground max-w-lg mx-auto">
+            <p className="text-text-secondary max-w-lg mx-auto">
               The principles that guide everything we do.
             </p>
           </motion.div>
@@ -172,28 +167,18 @@ export default function AboutPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="glass-card p-6 group hover:border-primary/30 transition-all duration-300 relative overflow-hidden"
+                className="bg-surface border border-border hover:border-border-hover rounded-xl p-6 group transition-all duration-300 relative overflow-hidden"
               >
-                <div
-                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                  style={{
-                    background: `radial-gradient(circle at 50% 0%, ${value.color}15, transparent 70%)`,
-                  }}
-                />
                 <div className="relative z-10">
                   <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110"
-                    style={{
-                      background: `${value.color}15`,
-                      border: `1px solid ${value.color}30`,
-                    }}
+                    className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-all duration-300 bg-primary/10 border border-primary/20"
                   >
-                    <value.icon size={22} style={{ color: value.color }} />
+                    <value.icon size={22} className="text-primary" />
                   </div>
-                  <h3 className="text-lg font-bold text-foreground mb-2">
+                  <h3 className="text-lg font-bold text-text-primary mb-2">
                     {value.title}
                   </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
+                  <p className="text-sm text-text-secondary leading-relaxed">
                     {value.description}
                   </p>
                 </div>
@@ -203,13 +188,13 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="py-20 border-t border-glass-border">
+      <section className="py-20 border-t border-border bg-background-secondary/50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <motion.div {...fadeUp} className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              Meet Our <span className="gradient-text">Team</span>
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-text-primary">
+              Meet Our <span className="text-primary">Team</span>
             </h2>
-            <p className="text-muted-foreground max-w-lg mx-auto">
+            <p className="text-text-secondary max-w-lg mx-auto">
               Passionate professionals dedicated to transforming iGaming
               networking.
             </p>
@@ -223,44 +208,41 @@ export default function AboutPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: i * 0.08 }}
-                className="glass-card p-6 text-center group hover:border-primary/30 transition-all duration-300"
+                className="bg-surface border border-border hover:border-border-hover rounded-xl p-6 text-center group transition-all duration-300"
               >
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/20 flex items-center justify-center mx-auto mb-4 text-xl font-bold text-foreground group-hover:scale-105 transition-transform duration-300">
+                <div className="w-16 h-16 rounded-full bg-surface-elevated border border-border flex items-center justify-center mx-auto mb-4 text-xl font-bold text-text-primary group-hover:scale-105 transition-transform duration-300">
                   {member.name
                     .split(" ")
                     .map((n) => n[0])
                     .join("")}
                 </div>
-                <h3 className="font-semibold text-foreground mb-1">
+                <h3 className="font-semibold text-text-primary mb-1">
                   {member.name}
                 </h3>
-                <p className="text-sm text-muted-foreground">{member.role}</p>
+                <p className="text-sm text-text-secondary">{member.role}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="py-24 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-t from-primary/5 via-transparent to-transparent" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-primary/10 rounded-full blur-[100px]" />
-
+      <section className="py-24 relative overflow-hidden border-t border-border">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div
             {...fadeUp}
-            className="text-center max-w-2xl mx-auto glass-card p-12"
+            className="text-center max-w-2xl mx-auto bg-surface border border-border rounded-xl p-12"
           >
             <Users size={32} className="mx-auto mb-4 text-primary" />
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              Join the <span className="gradient-text">network</span>
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-text-primary">
+              Join the <span className="text-primary">network</span>
             </h2>
-            <p className="text-muted-foreground mb-8 leading-relaxed">
+            <p className="text-text-secondary mb-8 leading-relaxed">
               Whether you&apos;re listing your company or searching for partners,
               iGaming Connect is where the industry connects.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               <Link href="/register">
-                <Button size="lg" className="bg-gradient-to-r from-primary to-secondary">
+                <Button size="lg" className="bg-primary hover:bg-primary-hover text-white">
                   Get Started
                   <ArrowRight size={16} />
                 </Button>

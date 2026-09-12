@@ -2,8 +2,48 @@ import crypto from "crypto";
 import { getDb, initDb } from "./db";
 import { hashPassword } from "./auth-local";
 
+export function seedMasterData(db: ReturnType<typeof getDb>) {
+  const roleCount = (db.prepare("SELECT COUNT(*) as count FROM business_roles").get() as { count: number }).count;
+  if (roleCount === 0) {
+    const roles = [
+      { id: crypto.randomUUID(), name: "Operator", slug: "operator", description: "Gaming operators & brands", icon: "Building2", sort_order: 1 },
+      { id: crypto.randomUUID(), name: "Affiliate Partner", slug: "affiliate-partner", description: "Affiliate & traffic", icon: "Share2", sort_order: 2 },
+      { id: crypto.randomUUID(), name: "Game Provider", slug: "game-provider", description: "Game development & content", icon: "Gamepad2", sort_order: 3 },
+      { id: crypto.randomUUID(), name: "Platform & Game Aggregator", slug: "platform-game-aggregator", description: "Aggregation & white label solutions", icon: "Layers", sort_order: 4 },
+      { id: crypto.randomUUID(), name: "Payment Solution Provider", slug: "payment-solution-provider", description: "Payment processing & fintech", icon: "CreditCard", sort_order: 5 },
+    ];
+    const stmt = db.prepare(
+      "INSERT INTO business_roles (id, name, slug, description, icon, status, sort_order) VALUES (?, ?, ?, ?, ?, 'active', ?)"
+    );
+    for (const r of roles) {
+      stmt.run(r.id, r.name, r.slug, r.description, r.icon, r.sort_order);
+    }
+  }
+
+  const sizeCount = (db.prepare("SELECT COUNT(*) as count FROM company_sizes").get() as { count: number }).count;
+  if (sizeCount === 0) {
+    const sizes = [
+      { id: crypto.randomUUID(), label: "1–10 employees", min: 1, max: 10, sort_order: 1 },
+      { id: crypto.randomUUID(), label: "11–50 employees", min: 11, max: 50, sort_order: 2 },
+      { id: crypto.randomUUID(), label: "51–200 employees", min: 51, max: 200, sort_order: 3 },
+      { id: crypto.randomUUID(), label: "201–500 employees", min: 201, max: 500, sort_order: 4 },
+      { id: crypto.randomUUID(), label: "501–1,000 employees", min: 501, max: 1000, sort_order: 5 },
+      { id: crypto.randomUUID(), label: "1,001–5,000 employees", min: 1001, max: 5000, sort_order: 6 },
+      { id: crypto.randomUUID(), label: "5,001–10,000 employees", min: 5001, max: 10000, sort_order: 7 },
+      { id: crypto.randomUUID(), label: "10,000+ employees", min: 10001, max: 999999, sort_order: 8 },
+    ];
+    const stmt = db.prepare(
+      "INSERT INTO company_sizes (id, label, min_employees, max_employees, status, sort_order) VALUES (?, ?, ?, ?, 'active', ?)"
+    );
+    for (const s of sizes) {
+      stmt.run(s.id, s.label, s.min, s.max, s.sort_order);
+    }
+  }
+}
+
 export async function seedDatabase() {
   const db = initDb();
+  seedMasterData(db);
 
   // Check if already seeded
   const existingCategories = db.prepare("SELECT COUNT(*) as count FROM categories").get() as { count: number };
@@ -535,6 +575,9 @@ export async function seedDatabase() {
     "INSERT INTO notifications (id, user_id, title, message, type, is_read, link, created_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)"
   ).run(crypto.randomUUID(), adminId, "System Update", "The platform has been seeded with demo data. All demo accounts are ready for use.", "system", null, now);
 
+  // Seed Offers
+  seedOffers(db);
+
   console.log("Database seeded successfully!");
   console.log(`  - ${categories.length} categories`);
   console.log(`  - ${countries.length} countries`);
@@ -542,7 +585,7 @@ export async function seedDatabase() {
   console.log(`  - 1 admin user (admin@igamingconnect.com)`);
   console.log(`  - ${demoUsers.length} demo users`);
   console.log(`  - ${companiesData.length} companies`);
-  console.log("  - Demo connections, messages, and opportunities created");
+  console.log("  - Demo connections, messages, opportunities, and offers created");
 
   return {
     message: "Database seeded successfully",
@@ -552,6 +595,149 @@ export async function seedDatabase() {
     companies: companiesData.length,
     users: demoUsers.length + 1,
   };
+}
+
+export function seedOffers(db: ReturnType<typeof getDb>) {
+  try {
+    const offerCount = (db.prepare("SELECT COUNT(*) as count FROM offers").get() as { count: number })?.count ?? 0;
+    if (offerCount > 0) return;
+
+    const now = new Date().toISOString();
+    const companies = db.prepare("SELECT id, name, slug FROM companies").all() as { id: string; name: string; slug: string }[];
+    if (companies.length === 0) return;
+
+    const findCo = (slug: string) => companies.find((c) => c.slug === slug)?.id || companies[0].id;
+    const adminUser = db.prepare("SELECT id FROM users WHERE role = 'super_admin' LIMIT 1").get() as { id: string } | undefined;
+    const adminId = adminUser?.id;
+
+    const sampleOffers = [
+      {
+        title: "BetConstruct Turnkey Sportsbook & Casino CPA Deal",
+        slug: "betconstruct-turnkey-sportsbook-cpa-deal",
+        company_id: findCo("betconstruct"),
+        brand: "Spring BME",
+        offer_type: "affiliate",
+        geo: "DE, AT, CH, NL, BR, CA",
+        traffic_type: "SEO, PPC, Social, Mobile App",
+        vertical: "Sportsbook & Casino",
+        payout: 180,
+        currency: "€",
+        payout_type: "CPA",
+        payout_description: "€180 per FTD (min deposit €20, baseline €20 wagered)",
+        conversion_event: "First Time Deposit (FTD)",
+        description: "Exclusive B2B performance deal for high-converting European & LATAM traffic. Access 120,000+ pre-match events and 8,000+ casino titles.",
+        terms: "No incentivized traffic. Minimum deposit €20. Duplicate accounts strictly excluded.",
+        allowed_traffic: "Organic SEO, Paid Search (no brand bidding), Social Ads, Native Ads, Email Marketing",
+        restricted_traffic: "Brand bidding, Bot traffic, Incentivized registrations, Adult content",
+        landing_page_url: "https://www.betconstruct.com/sportsbook",
+        status: "active",
+        is_featured: 1,
+      },
+      {
+        title: "Pragmatic Play Live Casino & Slots RevShare Campaign",
+        slug: "pragmatic-play-live-casino-revshare-campaign",
+        company_id: findCo("pragmatic-play"),
+        brand: "Pragmatic Play",
+        offer_type: "affiliate",
+        geo: "Global, EU, LATAM, Asia",
+        traffic_type: "SEO, Comparison Sites, Streamers",
+        vertical: "Casino & Live Dealer",
+        payout: 45,
+        currency: "%",
+        payout_type: "RevShare",
+        payout_description: "45% Net Revenue Share Lifetime (No Negative Carryover)",
+        conversion_event: "Net Gaming Revenue (NGR)",
+        description: "Partner with Pragmatic Play to promote industry-leading slots (Sweet Bonanza, Sugar Rush) and Live Dealer game shows. Uncapped lifetime earning potential.",
+        terms: "Monthly payout calculation. Negative carryover resets at the start of each calendar month.",
+        allowed_traffic: "Casino review portals, Streaming channels, Social media communities",
+        restricted_traffic: "Spam emails, Copyright infringement, Fake bonuses",
+        landing_page_url: "https://www.pragmaticplay.com",
+        status: "active",
+        is_featured: 1,
+      },
+      {
+        title: "SoftSwiss Game Aggregator Hybrid CPA + RevShare Deal",
+        slug: "softswiss-game-aggregator-hybrid-deal",
+        company_id: findCo("gaming-innovation-group") || findCo("softswiss"),
+        brand: "SoftSwiss",
+        offer_type: "operator",
+        geo: "BR, MX, CL, PE, DE, PL",
+        traffic_type: "SEO, PPC, Native",
+        vertical: "Crypto Casino & Aggregation",
+        payout: 120,
+        currency: "€",
+        payout_type: "Hybrid",
+        payout_description: "€120 CPA + 25% RevShare Lifetime",
+        conversion_event: "FTD + Wagering threshold",
+        description: "Special hybrid commercial structure for crypto & fiat casino operators and performance affiliates targeting LATAM and Eastern Europe.",
+        terms: "CPA paid upon €25 cumulative deposit within 14 days of registration.",
+        allowed_traffic: "Crypto gaming portals, iGaming news sites, Paid Search",
+        restricted_traffic: "Fraudulent leads, Auto-redirects",
+        landing_page_url: "https://www.softswiss.com",
+        status: "active",
+        is_featured: 1,
+      },
+      {
+        title: "Evolution Live Dealer High-Roller CPA Campaign",
+        slug: "evolution-live-dealer-high-roller-cpa",
+        company_id: findCo("evolution-gaming"),
+        brand: "Evolution Gaming",
+        offer_type: "operator",
+        geo: "UK, SE, NO, FI, CA, AU",
+        traffic_type: "VIP Portals, High-LTV SEO, Direct Mail",
+        vertical: "Live Casino & VIP Tables",
+        payout: 250,
+        currency: "€",
+        payout_type: "CPA",
+        payout_description: "€250 per Qualified VIP FTD (min deposit €100)",
+        conversion_event: "Qualified FTD (€100+)",
+        description: "Target high-net-worth VIP casino players for Evolution's premium Lightning Roulette and Crazy Time live game show suite.",
+        terms: "Baseline deposit of €100 required for CPA trigger. 30-day retention audit.",
+        allowed_traffic: "VIP casino reviews, High-end finance & luxury lifestyle blogs, Targeted PPC",
+        restricted_traffic: "Low-quality app installs, Pop-unders, SMS spam",
+        landing_page_url: "https://www.evolution.com",
+        status: "active",
+        is_featured: 0,
+      },
+    ];
+
+    const stmt = db.prepare(`
+      INSERT INTO offers (
+        id, title, slug, company_id, brand, offer_type, geo, traffic_type, vertical, payout, currency, payout_type, payout_description, conversion_event, description, terms, allowed_traffic, restricted_traffic, landing_page_url, status, is_featured, created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const off of sampleOffers) {
+      stmt.run(
+        crypto.randomUUID(),
+        off.title,
+        off.slug,
+        off.company_id,
+        off.brand,
+        off.offer_type,
+        off.geo,
+        off.traffic_type,
+        off.vertical,
+        off.payout,
+        off.currency,
+        off.payout_type,
+        off.payout_description,
+        off.conversion_event,
+        off.description,
+        off.terms,
+        off.allowed_traffic,
+        off.restricted_traffic,
+        off.landing_page_url,
+        off.status,
+        off.is_featured,
+        adminId || null,
+        now,
+        now
+      );
+    }
+  } catch (err) {
+    console.error("Error seeding offers:", err);
+  }
 }
 
 // Self-executing block for standalone usage

@@ -215,7 +215,7 @@ export default function CompanyAnalyticsPage() {
                         initial={{ height: 0 }}
                         animate={{ height: "100%" }}
                         transition={{ duration: 0.5, delay: 0.3 + i * 0.05 }}
-                        className="absolute inset-0 rounded-t-md bg-gradient-to-t from-primary/80 to-primary/40 border border-primary/30"
+                        className="absolute inset-0 rounded-t-md bg-primary border border-primary/30"
                       />
                     </div>
                     <span className="text-[10px] text-muted-foreground">{day.label}</span>
@@ -254,7 +254,7 @@ export default function CompanyAnalyticsPage() {
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.min((analytics.contactReveals / 50) * 100, 100)}%` }}
                   transition={{ duration: 0.8, delay: 0.4 }}
-                  className="h-full rounded-full bg-gradient-to-r from-neon-pink to-neon-purple"
+                  className="h-full rounded-full bg-primary"
                 />
               </div>
               <p className="text-xs text-muted-foreground mt-2 text-center">

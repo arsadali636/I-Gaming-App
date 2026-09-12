@@ -10,6 +10,33 @@ export const registerSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   full_name: z.string().min(2, "Name must be at least 2 characters"),
   company_name: z.string().optional(),
+  company_size_id: z.string().optional(),
+  country_id: z.string().optional(),
+  city: z.string().optional(),
+  state_region: z.string().optional(),
+  business_role_id: z.string().optional(),
+});
+
+export const step1RegisterSchema = z.object({
+  email: z.string().trim().email("Please enter a valid business email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  full_name: z.string().trim().min(2, "Name must be at least 2 characters"),
+});
+
+export const step2RegisterSchema = z.object({
+  company_name: z
+    .string()
+    .trim()
+    .min(2, "Company name must be at least 2 characters")
+    .max(100, "Company name cannot exceed 100 characters")
+    .refine((val) => !/^(test|asdf|qwerty|1234|abc|none)$/i.test(val), {
+      message: "Please enter a valid company name",
+    }),
+  company_size_id: z.string().min(1, "Please select a company size"),
+  country_id: z.string().min(1, "Please select a country"),
+  city: z.string().trim().min(2, "City is required"),
+  state_region: z.string().trim().optional(),
+  business_role_id: z.string().min(1, "Please select a business role"),
 });
 
 export const companySchema = z.object({

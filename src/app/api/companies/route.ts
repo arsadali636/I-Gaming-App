@@ -24,12 +24,32 @@ export async function GET(request: Request) {
     const offset = (page - 1) * limit;
     const db = getDb();
 
-    const conditions: string[] = ["c.status = 'approved'"];
+    const roleParam = searchParams.get("role") || searchParams.get("business_role") || "";
+    const companySizeParam = searchParams.get("company_size") || searchParams.get("size") || "";
+
+    const conditions: string[] = [
+      "c.status = 'approved'",
+      "(c.marketplace_visibility = 'visible' OR c.marketplace_visibility IS NULL)"
+    ];
     const params: unknown[] = [];
 
     if (search) {
-      conditions.push("(c.name LIKE ? OR c.description LIKE ?)");
-      params.push(`%${search}%`, `%${search}%`);
+      conditions.push("(c.name LIKE ? OR c.description LIKE ? OR c.city LIKE ?)");
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (roleParam) {
+      conditions.push(
+        "(br.slug = ? OR br.id = ? OR br.name = ?)"
+      );
+      params.push(roleParam, roleParam, roleParam);
+    }
+
+    if (companySizeParam) {
+      conditions.push(
+        "(cs.id = ? OR cs.label = ? OR c.employee_count = ?)"
+      );
+      params.push(companySizeParam, companySizeParam, companySizeParam);
     }
 
     if (category) {
@@ -57,11 +77,12 @@ export async function GET(request: Request) {
     }
 
     if (country) {
-      const countryRow = db.prepare("SELECT id FROM countries WHERE name = ?").get(country) as { id: string } | undefined;
-      if (countryRow) {
-        conditions.push("c.country_id = ?");
-        params.push(countryRow.id);
-      }
+      const countryRow = db.prepare("SELECT id FROM countries WHERE name = ? OR code = ? OR id = ?").get(country, country, country) as { id: string } | undefined;
+      const targetCountryId = countryRow ? countryRow.id : country;
+      conditions.push(
+        "(c.country_id = ? OR EXISTS (SELECT 1 FROM company_geos cg WHERE cg.company_id = c.id AND cg.country_id = ?))"
+      );
+      params.push(targetCountryId, targetCountryId);
     }
 
     if (market) {
@@ -69,7 +90,7 @@ export async function GET(request: Request) {
       params.push(`%${market}%`);
     }
 
-    if (verified === "true") {
+    if (verified === "true" || verified === "1") {
       conditions.push("c.is_verified = 1");
     }
 
@@ -84,14 +105,24 @@ export async function GET(request: Request) {
         orderBy = "c.name ASC";
         break;
       case "featured":
-        orderBy = "c.is_featured DESC, c.created_at DESC";
+      case "recommended":
+        orderBy = "c.is_featured DESC, c.is_verified DESC, c.created_at DESC";
+        break;
+      case "verified":
+        orderBy = "c.is_verified DESC, c.created_at DESC";
         break;
       default:
         orderBy = "c.created_at DESC";
     }
 
     const countRow = db
-      .prepare(`SELECT COUNT(*) as total FROM companies c ${where}`)
+      .prepare(
+        `SELECT COUNT(DISTINCT c.id) as total
+         FROM companies c
+         LEFT JOIN business_roles br ON c.business_role_id = br.id
+         LEFT JOIN company_sizes cs ON c.company_size_id = cs.id
+         ${where}`
+      )
       .get(...params) as { total: number };
 
     const total = countRow.total;
@@ -99,30 +130,120 @@ export async function GET(request: Request) {
     const rows = db
       .prepare(
         `SELECT c.*,
+                u.email as owner_email,
                 co.name as country_name, co.code as country_code,
-                GROUP_CONCAT(DISTINCT cat.name) as category_names,
-                GROUP_CONCAT(DISTINCT cat.id) as category_ids
+                br.id as br_id, br.name as br_name, br.slug as br_slug, br.icon as br_icon, br.description as br_desc,
+                cs.id as cs_id, cs.label as cs_label
          FROM companies c
+         LEFT JOIN users u ON c.created_by = u.id
          LEFT JOIN countries co ON c.country_id = co.id
-         LEFT JOIN company_categories cc ON c.id = cc.company_id
-         LEFT JOIN categories cat ON cc.category_id = cat.id
+         LEFT JOIN business_roles br ON c.business_role_id = br.id
+         LEFT JOIN company_sizes cs ON c.company_size_id = cs.id
          ${where}
          GROUP BY c.id
          ORDER BY ${orderBy}
          LIMIT ? OFFSET ?`
       )
-      .all(...params, limit, offset) as Record<string, unknown>[];
+      .all(...params, limit, offset) as Record<string, any>[];
 
-    const companies = rows.map((row) => ({
-      ...row,
-      category_ids: row.category_ids ? (row.category_ids as string).split(",") : [],
-      categories: row.category_names
-        ? (row.category_names as string).split(",").map((name: string) => ({ name }))
-        : [],
-      country: row.country_name
-        ? { name: row.country_name, code: row.country_code }
-        : null,
-    }));
+    const prepareCats = db.prepare(`
+      SELECT cat.id, cat.name, cat.slug, cat.icon, cat.color
+      FROM categories cat
+      JOIN company_categories cc ON cat.id = cc.category_id
+      WHERE cc.company_id = ? AND cat.is_active = 1
+      ORDER BY cat.sort_order ASC
+    `);
+
+    const prepareGeos = db.prepare(`
+      SELECT cg.country_id as id, cg.is_top, cg.display_order, co.name, co.code, co.region
+      FROM company_geos cg
+      JOIN countries co ON cg.country_id = co.id
+      WHERE cg.company_id = ?
+      ORDER BY cg.is_top DESC, cg.display_order ASC, co.name ASC
+    `);
+
+    const prepareSoftware = db.prepare(`
+      SELECT st.id, st.name, st.slug
+      FROM software_types st
+      JOIN company_software_types cst ON st.id = cst.software_type_id
+      WHERE cst.company_id = ?
+      ORDER BY st.sort_order ASC, st.name ASC
+    `);
+
+    const prepareService = db.prepare(`
+      SELECT st.id, st.name, st.slug
+      FROM service_types st
+      JOIN company_service_types cst ON st.id = cst.service_type_id
+      WHERE cst.company_id = ?
+      ORDER BY st.sort_order ASC, st.name ASC
+    `);
+
+    const prepareLicenses = db.prepare(`
+      SELECT lm.id, lm.name, lm.slug
+      FROM licenses_master lm
+      JOIN company_license_links cll ON lm.id = cll.license_id
+      WHERE cll.company_id = ?
+      ORDER BY lm.sort_order ASC, lm.name ASC
+    `);
+
+    const companies = rows.map((row) => {
+      const compId = row.id as string;
+      const cats = prepareCats.all(compId) as any[];
+      const geos = prepareGeos.all(compId) as any[];
+      const topGeos = geos.filter((g) => g.is_top === 1);
+      const softwareTypes = prepareSoftware.all(compId) as any[];
+      const serviceTypes = prepareService.all(compId) as any[];
+      const licenses = prepareLicenses.all(compId) as any[];
+
+      // Calculate completion score
+      let completedWeight = 0;
+      if (row.name) completedWeight += 10;
+      if (row.website) completedWeight += 10;
+      if (row.description && row.description.length > 15) completedWeight += 10;
+      if (row.logo_url) completedWeight += 10;
+      if (cats.length > 0) completedWeight += 15;
+      if (topGeos.length > 0) completedWeight += 15;
+      if (geos.length > 0) completedWeight += 10;
+      if (softwareTypes.length > 0) completedWeight += 10;
+      if (licenses.length > 0) completedWeight += 10;
+
+      const completionPercentage = Math.min(100, completedWeight);
+
+      return {
+        ...row,
+        contact_email: row.contact_email || row.owner_email || null,
+        categories: cats,
+        category_ids: cats.map((c) => c.id),
+        topGeos,
+        allGeos: geos,
+        softwareTypes,
+        serviceTypes,
+        licenses,
+        completionPercentage,
+        is_verified: Boolean(row.is_verified === 1 || row.is_verified === true),
+        is_featured: Boolean(row.is_featured === 1 || row.is_featured === true),
+        country: row.country_name
+          ? { name: row.country_name, code: row.country_code }
+          : topGeos.length > 0
+          ? { name: topGeos[0].name, code: topGeos[0].code }
+          : null,
+        business_role: row.br_name
+          ? {
+              id: row.br_id,
+              name: row.br_name,
+              slug: row.br_slug,
+              icon: row.br_icon,
+              description: row.br_desc,
+            }
+          : null,
+        company_size: row.cs_label
+          ? {
+              id: row.cs_id,
+              label: row.cs_label,
+            }
+          : null,
+      };
+    });
 
     return NextResponse.json(
       {
@@ -186,8 +307,8 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
 
     db.prepare(
-      `INSERT INTO companies (id, name, slug, description, website, founded_year, headquarters, country_id, market, employee_count, revenue_range, status, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`
+      `INSERT INTO companies (id, name, slug, description, website, founded_year, headquarters, country_id, market, employee_count, revenue_range, status, is_verified, marketplace_visibility, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 1, 'visible', ?, ?, ?)`
     ).run(
       companyId,
       name,
@@ -204,6 +325,8 @@ export async function POST(request: Request) {
       now,
       now
     );
+
+    db.prepare("UPDATE users SET company_id = ? WHERE id = ?").run(companyId, user.id);
 
     const insertCat = db.prepare(
       "INSERT INTO company_categories (company_id, category_id) VALUES (?, ?)"

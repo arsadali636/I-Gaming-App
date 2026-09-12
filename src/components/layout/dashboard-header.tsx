@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -11,6 +12,18 @@ import {
   User,
   Settings,
   X,
+  LayoutDashboard,
+  Tag,
+  MessageSquare,
+  Calendar,
+  Grid,
+  Store,
+  Contact,
+  Users,
+  Briefcase,
+  Bookmark,
+  CreditCard,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -26,19 +39,12 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [offersMenuOpen, setOffersMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const notificationCount = 3;
-
-  const pageTitle =
-    title ??
-    pathname
-      .split("/")
-      .filter(Boolean)
-      .pop()
-      ?.replace(/-/g, " ")
-      ?.replace(/\b\w/g, (c) => c.toUpperCase()) ??
-    "Dashboard";
 
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
@@ -47,23 +53,248 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
   useEffect(() => {
     setNotificationsOpen(false);
     setUserMenuOpen(false);
+    setMoreMenuOpen(false);
+    setOffersMenuOpen(false);
   }, [pathname]);
 
+  // Fetch real unread message count
+  useEffect(() => {
+    async function fetchUnreadCount() {
+      try {
+        const res = await fetch("/api/messages/unread-count");
+        if (res.ok) {
+          const data = await res.json();
+          setUnreadMessageCount(data.unread_count || 0);
+        }
+      } catch (err) {
+        // Silent catch for background unread count fetch
+      }
+    }
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const moreItems = [
+    { href: "/app/marketplace", label: "Marketplace", icon: Store, desc: "B2B Company Discovery" },
+    { href: "/app/contacts", label: "My Contacts", icon: Contact, desc: "Revealed Decision Makers" },
+    { href: "/app/connections", label: "Connections", icon: Users, desc: "Professional Network" },
+    { href: "/app/opportunities", label: "Opportunities", icon: Briefcase, desc: "B2B Deals & Demands" },
+    { href: "/app/saved", label: "Saved Items", icon: Bookmark, desc: "Bookmarked Entities" },
+    { href: "/app/subscription", label: "Subscription", icon: CreditCard, desc: "Plans & Credit Wallet" },
+  ];
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-glass-border glass px-4 sm:px-6">
-      <div className="flex items-center gap-4">
-        <h1 className="text-lg font-semibold text-foreground sm:text-xl">
-          {pageTitle}
-        </h1>
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/[0.07] bg-[#080C16]/95 backdrop-blur-xl px-4 sm:px-6 lg:px-8">
+      {/* LEFT: Branding & Main Navigation Bar */}
+      <div className="flex items-center gap-4 lg:gap-8">
+        <div className="flex items-center gap-3">
+          <Link href="/app" className="flex items-center gap-2.5 group">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-[#4F6BFF] via-[#3B54E6] to-[#60A5FA] shadow-[0_0_15px_rgba(79,107,255,0.4)] group-hover:scale-105 transition-transform duration-200">
+              <span className="text-[11px] font-black tracking-widest text-white">iG</span>
+            </div>
+            <span className="text-sm font-black tracking-tight text-white hidden md:inline">
+              iGaming <span className="text-[#60A5FA]">Connect</span>
+            </span>
+          </Link>
+        </div>
+
+        {/* AFFPAPA-STYLE TOP NAVIGATION */}
+        <nav className="hidden md:flex items-center gap-1 bg-[#111827]/80 p-1 rounded-2xl border border-white/[0.06]">
+          {/* Hub */}
+          <Link
+            href="/app"
+            className={cn(
+              "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all",
+              pathname === "/app"
+                ? "bg-[#4F6BFF] text-white shadow-md shadow-[#4F6BFF]/30"
+                : "text-[#94A3B8] hover:text-white hover:bg-white/[0.05]"
+            )}
+          >
+            <LayoutDashboard className="h-3.5 w-3.5" />
+            <span>Hub</span>
+          </Link>
+
+          {/* Offers Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setOffersMenuOpen(!offersMenuOpen);
+                setMoreMenuOpen(false);
+                setNotificationsOpen(false);
+                setUserMenuOpen(false);
+              }}
+              className={cn(
+                "relative flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer",
+                pathname.startsWith("/app/offers") || offersMenuOpen
+                  ? "bg-[#4F6BFF] text-white shadow-md shadow-[#4F6BFF]/30"
+                  : "text-[#94A3B8] hover:text-white hover:bg-white/[0.05]"
+              )}
+            >
+              <Tag className="h-3.5 w-3.5" />
+              <span>Offers</span>
+              <span className="rounded-full bg-[#EF4444] text-white text-[9px] font-black px-1.5 py-0.2">
+                NEW
+              </span>
+              <ChevronDown className={cn("h-3 w-3 transition-transform", offersMenuOpen && "rotate-180")} />
+            </button>
+
+            <AnimatePresence>
+              {offersMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute left-0 top-full mt-2 w-56 rounded-2xl bg-[#151C2C] border border-white/[0.08] p-2 shadow-2xl z-50 backdrop-blur-xl space-y-1"
+                >
+                  <Link
+                    href="/app/offers?type=affiliate"
+                    className="flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-bold text-[#F8FAFC] transition-colors hover:bg-white/[0.06] group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Users className="h-4 w-4 text-[#60A5FA]" />
+                      <span>Affiliate Offers</span>
+                    </div>
+                    <span className="rounded-full bg-[#EF4444] text-white text-[9px] font-black px-1.5 py-0.2">
+                      NEW
+                    </span>
+                  </Link>
+
+                  <Link
+                    href="/app/offers?type=operator"
+                    className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-bold text-[#F8FAFC] transition-colors hover:bg-white/[0.06] group"
+                  >
+                    <Tag className="h-4 w-4 text-[#34D399]" />
+                    <span>Operator Offers</span>
+                  </Link>
+
+                  <div className="my-1 border-t border-white/[0.06]" />
+
+                  <Link
+                    href="/app/offers"
+                    className="flex items-center justify-between rounded-xl px-3 py-2 text-[11px] font-semibold text-[#94A3B8] transition-colors hover:bg-white/[0.04] hover:text-white"
+                  >
+                    <span>View All Offers →</span>
+                  </Link>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Messages */}
+          <Link
+            href="/app/messages"
+            className={cn(
+              "relative flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all",
+              pathname.startsWith("/app/messages")
+                ? "bg-[#4F6BFF] text-white shadow-md shadow-[#4F6BFF]/30"
+                : "text-[#94A3B8] hover:text-white hover:bg-white/[0.05]"
+            )}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            <span>Messages</span>
+            {unreadMessageCount > 0 && (
+              <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#EF4444] px-1 text-[10px] font-extrabold text-white">
+                {unreadMessageCount}
+              </span>
+            )}
+          </Link>
+
+          {/* Events (Existing events page) */}
+          <Link
+            href="/events"
+            className={cn(
+              "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all",
+              pathname.startsWith("/events")
+                ? "bg-[#4F6BFF] text-white shadow-md shadow-[#4F6BFF]/30"
+                : "text-[#94A3B8] hover:text-white hover:bg-white/[0.05]"
+            )}
+          >
+            <Calendar className="h-3.5 w-3.5" />
+            <span>Events</span>
+          </Link>
+
+          {/* More Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setMoreMenuOpen(!moreMenuOpen);
+                setNotificationsOpen(false);
+                setUserMenuOpen(false);
+              }}
+              className={cn(
+                "flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer",
+                moreMenuOpen || moreItems.some((item) => pathname.startsWith(item.href))
+                  ? "bg-[#4F6BFF]/20 text-[#60A5FA] border border-[#4F6BFF]/40"
+                  : "text-[#94A3B8] hover:text-white hover:bg-white/[0.05]"
+              )}
+            >
+              <Grid className="h-3.5 w-3.5" />
+              <span>More</span>
+              <ChevronDown className={cn("h-3 w-3 transition-transform", moreMenuOpen && "rotate-180")} />
+            </button>
+
+            <AnimatePresence>
+              {moreMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute left-0 top-full mt-2 w-64 rounded-2xl bg-[#151C2C] border border-white/[0.08] p-2 shadow-2xl z-50 backdrop-blur-xl"
+                >
+                  <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[#64748B] border-b border-white/[0.06] mb-1">
+                    B2B Modules
+                  </div>
+                  <div className="space-y-0.5">
+                    {moreItems.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl p-2 text-xs transition-colors hover:bg-white/[0.04]",
+                          pathname.startsWith(item.href) ? "bg-[#4F6BFF]/15 text-[#60A5FA] font-bold" : "text-[#94A3B8]"
+                        )}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0 text-[#60A5FA]" />
+                        <div>
+                          <p className="font-bold text-[#F8FAFC]">{item.label}</p>
+                          <p className="text-[10px] text-[#64748B]">{item.desc}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Settings */}
+          <Link
+            href="/app/settings"
+            className={cn(
+              "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all",
+              pathname.startsWith("/app/settings")
+                ? "bg-[#4F6BFF] text-white shadow-md shadow-[#4F6BFF]/30"
+                : "text-[#94A3B8] hover:text-white hover:bg-white/[0.05]"
+            )}
+          >
+            <Settings className="h-3.5 w-3.5" />
+            <span>Settings</span>
+          </Link>
+        </nav>
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* RIGHT: Search, Notifications & User Dropdown */}
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        {/* Search */}
         <div className="relative">
           <AnimatePresence>
             {searchOpen && (
               <motion.div
                 initial={{ width: 0, opacity: 0 }}
-                animate={{ width: 240, opacity: 1 }}
+                animate={{ width: 260, opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
                 transition={{ duration: 0.2 }}
                 className="absolute right-0 top-1/2 -translate-y-1/2 overflow-hidden"
@@ -73,18 +304,18 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search..."
-                  className="h-9 w-full rounded-lg border border-glass-border bg-background/50 pl-9 pr-8 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-neon-purple/50 focus:ring-1 focus:ring-neon-purple/25"
+                  placeholder="Search network, offers, contacts..."
+                  className="h-9 w-full rounded-xl border border-white/[0.08] bg-[#111827] pl-9 pr-8 text-xs text-[#F8FAFC] placeholder:text-[#64748B] outline-none focus:border-[#4F6BFF] transition-all shadow-lg"
                 />
-                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#94A3B8]" />
                 <button
                   onClick={() => {
                     setSearchOpen(false);
                     setSearchQuery("");
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#F8FAFC] cursor-pointer"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3 w-3" />
                 </button>
               </motion.div>
             )}
@@ -93,28 +324,31 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
           {!searchOpen && (
             <button
               onClick={() => setSearchOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+              className="flex h-9 items-center gap-2 rounded-xl border border-white/[0.06] bg-[#111827] px-3 py-1.5 text-xs font-medium text-[#94A3B8] transition-all hover:border-white/[0.12] hover:bg-white/[0.04] hover:text-[#F8FAFC] cursor-pointer"
               aria-label="Search"
             >
-              <Search className="h-4.5 w-4.5" />
+              <Search className="h-3.5 w-3.5 text-[#94A3B8]" />
+              <span className="hidden sm:inline">Search...</span>
             </button>
           )}
         </div>
 
+        {/* Notifications Trigger & Dropdown */}
         <div className="relative">
           <button
             onClick={() => {
               setNotificationsOpen(!notificationsOpen);
               setUserMenuOpen(false);
+              setMoreMenuOpen(false);
             }}
-            className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.06] bg-[#111827] text-[#94A3B8] transition-all hover:border-white/[0.12] hover:bg-white/[0.04] hover:text-[#F8FAFC] cursor-pointer"
             aria-label="Notifications"
-            aria-expanded={notificationsOpen}
           >
-            <Bell className="h-4.5 w-4.5" />
+            <Bell className="h-4 w-4" />
             {notificationCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-neon-pink px-1 text-[10px] font-bold text-white">
-                {notificationCount}
+              <span className="absolute right-1.5 top-1.5 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#60A5FA] opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#4F6BFF]" />
               </span>
             )}
           </button>
@@ -122,61 +356,65 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
           <AnimatePresence>
             {notificationsOpen && (
               <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                initial={{ opacity: 0, y: 10, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                exit={{ opacity: 0, y: 10, scale: 0.96 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 top-full mt-2 w-80 overflow-hidden rounded-xl glass border border-glass-border shadow-xl"
+                className="absolute right-0 top-full mt-3 w-80 sm:w-96 overflow-hidden rounded-2xl bg-[#151C2C] border border-white/[0.08] shadow-2xl z-50 backdrop-blur-xl"
               >
-                <div className="flex items-center justify-between border-b border-glass-border px-4 py-3">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Notifications
-                  </h3>
-                  <button className="text-xs text-neon-cyan hover:underline">
-                    Mark all read
-                  </button>
+                <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5 bg-[#111827]">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-bold text-[#F8FAFC]">
+                      Notifications
+                    </h3>
+                    <span className="rounded-full bg-[#4F6BFF]/20 px-2 py-0.5 text-[10px] font-bold text-[#60A5FA]">
+                      3 New
+                    </span>
+                  </div>
                 </div>
-                <div className="max-h-80 overflow-y-auto">
-                  {[1, 2, 3].map((i) => (
+                <div className="max-h-80 overflow-y-auto divide-y divide-white/[0.04]">
+                  {[
+                    { title: "New B2B Offer Available", time: "10 mins ago", type: "Offer" },
+                    { title: "New connection request received", time: "1 hour ago", type: "Network" },
+                    { title: "Upcoming iGaming Event: Summit 2026", time: "3 hours ago", type: "Event" },
+                  ].map((notif, i) => (
                     <div
                       key={i}
-                      className="border-b border-glass-border px-4 py-3 transition-colors hover:bg-white/5"
+                      className="px-5 py-3 transition-colors hover:bg-white/[0.03] cursor-pointer flex gap-3 items-start"
                     >
-                      <p className="text-sm text-foreground">
-                        New connection request from Company {i}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {i} hour{i !== 1 ? "s" : ""} ago
-                      </p>
+                      <div className="w-2 h-2 mt-1.5 rounded-full bg-[#4F6BFF] shrink-0" />
+                      <div>
+                        <p className="text-xs font-medium text-[#F8FAFC]">
+                          {notif.title}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-[#94A3B8]">
+                          {notif.time} • {notif.type}
+                        </p>
+                      </div>
                     </div>
                   ))}
-                </div>
-                <div className="border-t border-glass-border px-4 py-2.5">
-                  <button className="w-full text-center text-xs font-medium text-neon-cyan hover:underline">
-                    View all notifications
-                  </button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
+        {/* User Dropdown */}
         <div className="relative">
           <button
             onClick={() => {
               setUserMenuOpen(!userMenuOpen);
               setNotificationsOpen(false);
+              setMoreMenuOpen(false);
             }}
-            className="flex items-center gap-2 rounded-lg p-1.5 transition-colors hover:bg-white/5"
-            aria-expanded={userMenuOpen}
-            aria-haspopup="true"
+            className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-[#111827] p-1 pr-2.5 transition-all hover:border-white/[0.12] hover:bg-white/[0.04] cursor-pointer"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-neon-purple to-neon-cyan text-xs font-semibold text-white">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#4F6BFF] to-[#3B54E6] text-xs font-bold text-white shadow-md">
               {user?.avatar_url ? (
                 <img
                   src={user.avatar_url}
                   alt={user.full_name}
-                  className="h-8 w-8 rounded-full object-cover"
+                  className="h-7 w-7 rounded-lg object-cover"
                 />
               ) : user ? (
                 getInitials(user.full_name)
@@ -184,48 +422,47 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
                 "?"
               )}
             </div>
-            <ChevronDown
-              className={cn(
-                "hidden h-4 w-4 text-muted-foreground transition-transform sm:block",
-                userMenuOpen && "rotate-180"
-              )}
-            />
+            <span className="hidden sm:inline text-xs font-bold text-[#F8FAFC]">
+              {user?.full_name?.split(" ")[0] ?? "Account"}
+            </span>
+            <ChevronDown className={cn("h-3 w-3 text-[#94A3B8] transition-transform", userMenuOpen && "rotate-180")} />
           </button>
 
           <AnimatePresence>
             {userMenuOpen && (
               <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                initial={{ opacity: 0, y: 10, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                exit={{ opacity: 0, y: 10, scale: 0.96 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-xl glass border border-glass-border p-1.5 shadow-xl"
+                className="absolute right-0 top-full mt-3 w-60 overflow-hidden rounded-2xl bg-[#151C2C] border border-white/[0.08] p-2 shadow-2xl z-50 backdrop-blur-xl"
               >
-                <div className="border-b border-glass-border px-3 py-2 mb-1">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {user?.full_name ?? "Guest"}
+                <div className="border-b border-white/[0.06] px-3 py-2 mb-1.5 bg-[#111827] rounded-xl">
+                  <p className="text-xs font-bold text-[#F8FAFC] truncate">
+                    {user?.full_name ?? "Authenticated User"}
                   </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {user?.email ?? ""}
+                  <p className="text-[10px] text-[#94A3B8] truncate mt-0.5">
+                    {user?.email ?? "B2B Network Member"}
                   </p>
                 </div>
-                <a
-                  href="/app"
-                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                <Link
+                  href="/app/profile"
+                  className="flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-semibold text-[#94A3B8] transition-colors hover:bg-white/[0.04] hover:text-[#F8FAFC]"
                 >
-                  <User className="h-4 w-4" />
-                  Profile
-                </a>
-                <a
+                  <User className="h-4 w-4 text-[#60A5FA]" />
+                  My Profile
+                </Link>
+                <Link
                   href="/app/settings"
-                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                  className="flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-semibold text-[#94A3B8] transition-colors hover:bg-white/[0.04] hover:text-[#F8FAFC]"
                 >
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </a>
+                  <Settings className="h-4 w-4 text-[#94A3B8]" />
+                  Account Settings
+                </Link>
+                <div className="my-1 border-t border-white/[0.06]" />
                 <button
                   onClick={logout}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-xs font-semibold text-[#EF4444] transition-colors hover:bg-[#EF4444]/10 cursor-pointer"
                 >
                   <LogOut className="h-4 w-4" />
                   Sign Out

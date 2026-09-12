@@ -38,6 +38,7 @@ export async function updateSession(request: NextRequest) {
   const publicPaths = [
     "/",
     "/marketplace",
+    "/categories",
     "/pricing",
     "/about",
     "/contact",
@@ -48,6 +49,7 @@ export async function updateSession(request: NextRequest) {
   const isPublicPath =
     publicPaths.includes(pathname) ||
     pathname.startsWith("/category/") ||
+    pathname.startsWith("/categories/") ||
     pathname.startsWith("/company/");
 
   if (!user && !isPublicPath && !pathname.startsWith("/api/")) {
