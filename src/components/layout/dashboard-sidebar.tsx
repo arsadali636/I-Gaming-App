@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
+  Newspaper,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -45,6 +46,7 @@ const sidebarSections: SidebarSection[] = [
   {
     title: "NETWORK & B2B",
     items: [
+      { href: "/app/feed", label: "Industry Feed", icon: Newspaper },
       { href: "/app/contacts", label: "My Contacts", icon: Contact },
       { href: "/app/connections", label: "Connections", icon: Users },
       { href: "/app/opportunities", label: "Opportunities", icon: Briefcase },

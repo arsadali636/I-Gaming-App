@@ -24,6 +24,7 @@ import {
   Bookmark,
   CreditCard,
   ExternalLink,
+  Newspaper,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -76,6 +77,7 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
   }, []);
 
   const moreItems = [
+    { href: "/app/feed", label: "Industry Feed", icon: Newspaper, desc: "Global B2B Activity Feed" },
     { href: "/app/marketplace", label: "Marketplace", icon: Store, desc: "B2B Company Discovery" },
     { href: "/app/contacts", label: "My Contacts", icon: Contact, desc: "Revealed Decision Makers" },
     { href: "/app/connections", label: "Connections", icon: Users, desc: "Professional Network" },
@@ -113,6 +115,20 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
           >
             <LayoutDashboard className="h-3.5 w-3.5" />
             <span>Hub</span>
+          </Link>
+
+          {/* Feed */}
+          <Link
+            href="/app/feed"
+            className={cn(
+              "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all",
+              pathname === "/app/feed"
+                ? "bg-[#4F6BFF] text-white shadow-md shadow-[#4F6BFF]/30"
+                : "text-[#94A3B8] hover:text-white hover:bg-white/[0.05]"
+            )}
+          >
+            <Newspaper className="h-3.5 w-3.5" />
+            <span>Feed</span>
           </Link>
 
           {/* Offers Dropdown */}

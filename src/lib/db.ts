@@ -577,6 +577,61 @@ export function initDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_offer_apps_offer ON offer_applications(offer_id);
     CREATE INDEX IF NOT EXISTS idx_offer_apps_user ON offer_applications(user_id);
 
+    CREATE TABLE IF NOT EXISTS feed_posts (
+      id TEXT PRIMARY KEY,
+      author_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      company_id TEXT REFERENCES companies(id) ON DELETE SET NULL,
+      post_type TEXT NOT NULL DEFAULT 'text' CHECK (post_type IN ('text', 'image', 'event')),
+      content TEXT,
+      visibility TEXT NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'members')),
+      event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('published', 'draft', 'deleted')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS feed_post_media (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+      media_url TEXT NOT NULL,
+      media_type TEXT NOT NULL DEFAULT 'image',
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS feed_comments (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS feed_post_likes (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(post_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS feed_post_saves (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(post_id, user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_feed_posts_author ON feed_posts(author_user_id);
+    CREATE INDEX IF NOT EXISTS idx_feed_posts_company ON feed_posts(company_id);
+    CREATE INDEX IF NOT EXISTS idx_feed_posts_status_created ON feed_posts(status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_feed_media_post ON feed_post_media(post_id, sort_order);
+    CREATE INDEX IF NOT EXISTS idx_feed_comments_post ON feed_comments(post_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_feed_likes_post_user ON feed_post_likes(post_id, user_id);
+    CREATE INDEX IF NOT EXISTS idx_feed_saves_post_user ON feed_post_saves(post_id, user_id);
+
     CREATE TABLE IF NOT EXISTS software_types (
       id TEXT PRIMARY KEY,
       name TEXT UNIQUE NOT NULL,
