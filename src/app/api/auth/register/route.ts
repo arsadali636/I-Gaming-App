@@ -28,6 +28,10 @@ export async function POST(request: Request) {
       email,
       password,
       full_name,
+      phone,
+      telegram_id,
+      instagram,
+      discord,
       company_name,
       company_size_id,
       country_id,
@@ -38,10 +42,28 @@ export async function POST(request: Request) {
 
     const trimmedEmail = email?.trim();
     const trimmedFullName = full_name?.trim();
+    const trimmedPhone = phone?.trim();
+    const trimmedTelegram = telegram_id?.trim();
+    const trimmedInstagram = instagram?.trim() || null;
+    const trimmedDiscord = discord?.trim() || null;
 
     if (!trimmedEmail || !password || !trimmedFullName) {
       return NextResponse.json(
         { error: "email, password, and full_name are required" },
+        { status: 400 }
+      );
+    }
+
+    if (!trimmedPhone) {
+      return NextResponse.json(
+        { error: "Phone number is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!trimmedTelegram) {
+      return NextResponse.json(
+        { error: "Telegram ID is required" },
         { status: 400 }
       );
     }
@@ -115,9 +137,9 @@ export async function POST(request: Request) {
     const executeRegistration = db.transaction(() => {
       // 1. Insert user
       db.prepare(
-        `INSERT INTO users (id, email, full_name, password_hash, role, company_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(userId, trimmedEmail, trimmedFullName, password_hash, userRole, companyId, now, now);
+        `INSERT INTO users (id, email, full_name, phone, telegram_id, instagram, discord, password_hash, role, company_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(userId, trimmedEmail, trimmedFullName, trimmedPhone, trimmedTelegram, trimmedInstagram, trimmedDiscord, password_hash, userRole, companyId, now, now);
 
       let companyRecord = null;
 
@@ -209,7 +231,7 @@ export async function POST(request: Request) {
          VALUES (?, ?, 10, 10, 0, ?, ?)`
       ).run(walletId, userId, now, now);
 
-      const userRecord = db.prepare("SELECT id, email, full_name, role, company_id, avatar_url, created_at, updated_at FROM users WHERE id = ?").get(userId);
+      const userRecord = db.prepare("SELECT id, email, full_name, phone, telegram_id, instagram, discord, role, company_id, avatar_url, created_at, updated_at FROM users WHERE id = ?").get(userId);
 
       return { user: userRecord, company: companyRecord };
     });

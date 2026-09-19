@@ -106,7 +106,12 @@ export async function GET() {
 
     const db = getDb();
 
-    let companyId = user.company_id;
+    const dbUser = db.prepare(
+      "SELECT id, email, full_name, phone, telegram_id, instagram, discord, role, company_id, avatar_url, created_at, updated_at FROM users WHERE id = ?"
+    ).get(user.id) as any;
+    const currentUser = dbUser || user;
+
+    let companyId = currentUser.company_id;
     if (!companyId) {
       const existingComp = db.prepare("SELECT id FROM companies WHERE created_by = ?").get(user.id) as { id: string } | undefined;
       if (existingComp) {
@@ -117,7 +122,7 @@ export async function GET() {
 
     if (!companyId) {
       return NextResponse.json({
-        user,
+        user: currentUser,
         company: null,
         categories: [],
         topGeos: [],
@@ -262,7 +267,7 @@ export async function GET() {
     );
 
     return NextResponse.json({
-      user,
+      user: currentUser,
       company,
       categories,
       topGeos,
@@ -284,6 +289,31 @@ export async function PUT(req: NextRequest) {
     const user = await requireAuth();
     const db = getDb();
     const body = await req.json();
+
+    // Update User Contact fields if provided
+    const userUpdates: string[] = [];
+    const userValues: any[] = [];
+    if (body.phone !== undefined) {
+      userUpdates.push("phone = ?");
+      userValues.push(body.phone ? String(body.phone).trim() : null);
+    }
+    if (body.telegram_id !== undefined) {
+      userUpdates.push("telegram_id = ?");
+      userValues.push(body.telegram_id ? String(body.telegram_id).trim() : null);
+    }
+    if (body.instagram !== undefined) {
+      userUpdates.push("instagram = ?");
+      userValues.push(body.instagram ? String(body.instagram).trim() : null);
+    }
+    if (body.discord !== undefined) {
+      userUpdates.push("discord = ?");
+      userValues.push(body.discord ? String(body.discord).trim() : null);
+    }
+    if (userUpdates.length > 0) {
+      userUpdates.push("updated_at = datetime('now')");
+      userValues.push(user.id);
+      db.prepare(`UPDATE users SET ${userUpdates.join(", ")} WHERE id = ?`).run(...userValues);
+    }
 
     let companyId = user.company_id;
     if (!companyId) {

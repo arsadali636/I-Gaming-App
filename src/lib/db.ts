@@ -22,6 +22,10 @@ export function initDb(): Database.Database {
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       full_name TEXT NOT NULL,
+      phone TEXT,
+      telegram_id TEXT,
+      instagram TEXT,
+      discord TEXT,
       avatar_url TEXT,
       password_hash TEXT,
       role TEXT NOT NULL DEFAULT 'professional' CHECK (role IN ('super_admin', 'admin', 'moderator', 'company_owner', 'company_member', 'professional')),
@@ -690,6 +694,25 @@ export function initDb(): Database.Database {
   `);
 
   // Safe migration for existing tables
+  try {
+    const userTableInfo = database.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+    const userColNames = userTableInfo.map((col) => col.name);
+    if (!userColNames.includes("phone")) {
+      database.exec("ALTER TABLE users ADD COLUMN phone TEXT");
+    }
+    if (!userColNames.includes("telegram_id")) {
+      database.exec("ALTER TABLE users ADD COLUMN telegram_id TEXT");
+    }
+    if (!userColNames.includes("instagram")) {
+      database.exec("ALTER TABLE users ADD COLUMN instagram TEXT");
+    }
+    if (!userColNames.includes("discord")) {
+      database.exec("ALTER TABLE users ADD COLUMN discord TEXT");
+    }
+  } catch (migErr) {
+    console.error("Error migrating users table columns:", migErr);
+  }
+
   try {
     const tableInfo = database.prepare("PRAGMA table_info(companies)").all() as { name: string }[];
     const columnNames = tableInfo.map((col) => col.name);

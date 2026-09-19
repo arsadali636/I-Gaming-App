@@ -27,6 +27,10 @@ import {
   Sparkles,
   Info,
   Briefcase,
+  Phone,
+  Send,
+  Camera,
+  MessageSquare,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -520,6 +524,97 @@ export default function ProfilePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ============================================================ */}
+      {/* 2.5. CONTACT INFORMATION */}
+      {/* ============================================================ */}
+      {(() => {
+        const userObj = profile?.user || user;
+        const hasContactInfo = Boolean(
+          userObj?.email || comp?.contact_email || userObj?.phone || userObj?.telegram_id || userObj?.instagram || userObj?.discord
+        );
+        if (!hasContactInfo) return null;
+
+        return (
+          <Card id="contact-info" className="border border-white/[0.08] bg-[#111827]/90 shadow-xl rounded-2xl">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                <div className="flex items-center gap-2.5">
+                  <Mail className="h-4 w-4 text-[#60A5FA]" />
+                  <h3 className="text-sm font-bold text-white">Contact Information</h3>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Email */}
+                {(userObj?.email || comp?.contact_email) && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#4F6BFF]/15 text-[#60A5FA]">
+                      <Mail size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">Email</p>
+                      <p className="text-xs font-bold text-white truncate">{userObj?.email || comp?.contact_email}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Phone */}
+                {userObj?.phone && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#10B981]/15 text-[#10B981]">
+                      <Phone size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">Phone</p>
+                      <p className="text-xs font-bold text-white truncate">{userObj.phone}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Telegram */}
+                {userObj?.telegram_id && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#22C1DC]/15 text-[#22C1DC]">
+                      <Send size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">Telegram</p>
+                      <p className="text-xs font-bold text-white truncate">{userObj.telegram_id}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Instagram (Optional) */}
+                {userObj?.instagram && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E1306C]/15 text-[#E1306C]">
+                      <Camera size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">Instagram</p>
+                      <p className="text-xs font-bold text-white truncate">{userObj.instagram}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Discord (Optional) */}
+                {userObj?.discord && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#5865F2]/15 text-[#5865F2]">
+                      <MessageSquare size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#64748B]">Discord</p>
+                      <p className="text-xs font-bold text-white truncate">{userObj.discord}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* ============================================================ */}
       {/* 3. BUSINESS CATEGORIES */}

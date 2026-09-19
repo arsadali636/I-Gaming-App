@@ -24,6 +24,10 @@ import {
   CreditCard,
   Check,
   Globe,
+  Phone,
+  Send,
+  Camera,
+  MessageSquare,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/store";
 import type { BusinessRole, CompanySize, Country } from "@/types";
@@ -45,6 +49,10 @@ export default function RegisterPage() {
   // Step 1: Account State
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
+  const [phone, setPhone] = useState("");
+  const [telegramId, setTelegramId] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [discord, setDiscord] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -106,9 +114,17 @@ export default function RegisterPage() {
     }
 
     if (!trimmedUsername) {
-      errors.username = "Full Name or Username is required.";
+      errors.username = "Full Name is required.";
     } else if (trimmedUsername.length < 2) {
       errors.username = "Name must be at least 2 characters.";
+    }
+
+    if (!phone.trim()) {
+      errors.phone = "Phone Number is required.";
+    }
+
+    if (!telegramId.trim()) {
+      errors.telegramId = "Telegram ID is required.";
     }
 
     if (!password) {
@@ -191,6 +207,10 @@ export default function RegisterPage() {
           email: email.trim(),
           password,
           full_name: username.trim(),
+          phone: phone.trim(),
+          telegram_id: telegramId.trim(),
+          instagram: instagram.trim() || undefined,
+          discord: discord.trim() || undefined,
           company_name: companyName.trim(),
           company_size_id: companySizeId,
           country_id: countryId,
@@ -372,6 +392,112 @@ export default function RegisterPage() {
                 {fieldErrors.username && (
                   <p className="text-xs font-medium text-[#EF4444] mt-1">{fieldErrors.username}</p>
                 )}
+              </div>
+
+              {/* Contact Details Section */}
+              <div className="pt-2 pb-1 border-t border-[#252A3A]/60 space-y-4">
+                <div className="text-xs font-bold text-[#F8FAFC] tracking-wider uppercase text-opacity-80">
+                  Contact Details
+                </div>
+
+                {/* Phone Number */}
+                <div className="space-y-1.5">
+                  <label htmlFor="phone" className="block text-xs font-medium text-[#A1A9B8]">
+                    Phone Number *
+                  </label>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#6B7280]">
+                      <Phone size={16} />
+                    </div>
+                    <input
+                      id="phone"
+                      type="tel"
+                      placeholder="+1 (555) 000-0000"
+                      value={phone}
+                      onChange={(e) => {
+                        setPhone(e.target.value);
+                        if (fieldErrors.phone) setFieldErrors((p) => ({ ...p, phone: "" }));
+                      }}
+                      required
+                      autoComplete="tel"
+                      className={`w-full rounded-xl border ${
+                        fieldErrors.phone ? "border-[#EF4444] bg-[#EF4444]/5" : "border-[#252A3A] bg-[#111522]"
+                      } py-2.5 pl-10 pr-4 text-xs sm:text-sm text-[#F8FAFC] placeholder:text-[#6B7280] transition-all focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15 outline-none`}
+                    />
+                  </div>
+                  {fieldErrors.phone && (
+                    <p className="text-xs font-medium text-[#EF4444] mt-1">{fieldErrors.phone}</p>
+                  )}
+                </div>
+
+                {/* Telegram ID */}
+                <div className="space-y-1.5">
+                  <label htmlFor="telegramId" className="block text-xs font-medium text-[#A1A9B8]">
+                    Telegram ID *
+                  </label>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#6B7280]">
+                      <Send size={16} />
+                    </div>
+                    <input
+                      id="telegramId"
+                      type="text"
+                      placeholder="@username or telegram_id"
+                      value={telegramId}
+                      onChange={(e) => {
+                        setTelegramId(e.target.value);
+                        if (fieldErrors.telegramId) setFieldErrors((p) => ({ ...p, telegramId: "" }));
+                      }}
+                      required
+                      className={`w-full rounded-xl border ${
+                        fieldErrors.telegramId ? "border-[#EF4444] bg-[#EF4444]/5" : "border-[#252A3A] bg-[#111522]"
+                      } py-2.5 pl-10 pr-4 text-xs sm:text-sm text-[#F8FAFC] placeholder:text-[#6B7280] transition-all focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15 outline-none`}
+                    />
+                  </div>
+                  {fieldErrors.telegramId && (
+                    <p className="text-xs font-medium text-[#EF4444] mt-1">{fieldErrors.telegramId}</p>
+                  )}
+                </div>
+
+                {/* Instagram (Optional) */}
+                <div className="space-y-1.5">
+                  <label htmlFor="instagram" className="block text-xs font-medium text-[#A1A9B8]">
+                    Instagram
+                  </label>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#6B7280]">
+                      <Camera size={16} />
+                    </div>
+                    <input
+                      id="instagram"
+                      type="text"
+                      placeholder="@username (optional)"
+                      value={instagram}
+                      onChange={(e) => setInstagram(e.target.value)}
+                      className="w-full rounded-xl border border-[#252A3A] bg-[#111522] py-2.5 pl-10 pr-4 text-xs sm:text-sm text-[#F8FAFC] placeholder:text-[#6B7280] transition-all focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Discord (Optional) */}
+                <div className="space-y-1.5">
+                  <label htmlFor="discord" className="block text-xs font-medium text-[#A1A9B8]">
+                    Discord
+                  </label>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#6B7280]">
+                      <MessageSquare size={16} />
+                    </div>
+                    <input
+                      id="discord"
+                      type="text"
+                      placeholder="username#0000 (optional)"
+                      value={discord}
+                      onChange={(e) => setDiscord(e.target.value)}
+                      className="w-full rounded-xl border border-[#252A3A] bg-[#111522] py-2.5 pl-10 pr-4 text-xs sm:text-sm text-[#F8FAFC] placeholder:text-[#6B7280] transition-all focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15 outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Password Field */}

@@ -4,6 +4,10 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
+  phone?: string;
+  telegram_id?: string;
+  instagram?: string;
+  discord?: string;
   avatar_url?: string;
   role: UserRole;
   company_id?: string;

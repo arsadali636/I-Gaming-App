@@ -161,7 +161,7 @@ export async function GET(
       .all(compId) as Record<string, unknown>[];
 
     const ownerUser = company.created_by
-      ? (db.prepare("SELECT email FROM users WHERE id = ?").get(company.created_by) as { email: string } | undefined)
+      ? (db.prepare("SELECT id, email, full_name, phone, telegram_id, instagram, discord FROM users WHERE id = ?").get(company.created_by) as any)
       : null;
     const contact_email = (company.contact_email as string) || ownerUser?.email || null;
 
@@ -238,6 +238,7 @@ export async function GET(
       business_role: businessRole,
       completionPercentage,
       completionItems,
+      owner_user: ownerUser,
       isOwner: Boolean(isOwner),
       is_verified: Boolean(company.is_verified === 1 || company.is_verified === true),
       is_featured: Boolean(company.is_featured === 1 || company.is_featured === true),

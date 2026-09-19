@@ -18,6 +18,11 @@ import {
   ShieldCheck,
   CheckCircle2,
   Sparkles,
+  Mail,
+  Phone,
+  Send,
+  Camera,
+  MessageSquare,
 } from "lucide-react";
 import { getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -358,6 +363,85 @@ export default function PublicCompanyProfilePage({
                   No licenses added
                 </div>
               )}
+            </Card>
+
+            {/* Contact Information Card */}
+            <Card className="border border-white/10 bg-[#111827] p-6 rounded-2xl space-y-4 shadow-xl">
+              <h3 className="text-base font-bold text-white flex items-center gap-2 border-b border-white/[0.06] pb-3">
+                <Mail size={18} className="text-[#60A5FA]" />
+                Contact Information
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {(company.contact_email || company.owner_user?.email) && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#4F6BFF]/15 text-[#60A5FA]">
+                      <Mail size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</p>
+                      <p className="text-xs font-bold text-white truncate">
+                        {company.contact_email || company.owner_user?.email}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {(company.owner_user?.phone || company.phone) && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#10B981]/15 text-[#10B981]">
+                      <Phone size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Phone</p>
+                      <p className="text-xs font-bold text-white truncate">
+                        {company.owner_user?.phone || company.phone}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {company.owner_user?.telegram_id && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#22C1DC]/15 text-[#22C1DC]">
+                      <Send size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Telegram</p>
+                      <p className="text-xs font-bold text-white truncate">
+                        {company.owner_user.telegram_id}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {company.owner_user?.instagram && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E1306C]/15 text-[#E1306C]">
+                      <Camera size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Instagram</p>
+                      <p className="text-xs font-bold text-white truncate">
+                        {company.owner_user.instagram}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {company.owner_user?.discord && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#5865F2]/15 text-[#5865F2]">
+                      <MessageSquare size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discord</p>
+                      <p className="text-xs font-bold text-white truncate">
+                        {company.owner_user.discord}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </Card>
           </div>
 

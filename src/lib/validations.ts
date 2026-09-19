@@ -9,6 +9,10 @@ export const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   full_name: z.string().min(2, "Name must be at least 2 characters"),
+  phone: z.string().min(1, "Phone number is required"),
+  telegram_id: z.string().min(1, "Telegram ID is required"),
+  instagram: z.string().optional(),
+  discord: z.string().optional(),
   company_name: z.string().optional(),
   company_size_id: z.string().optional(),
   country_id: z.string().optional(),
@@ -21,6 +25,10 @@ export const step1RegisterSchema = z.object({
   email: z.string().trim().email("Please enter a valid business email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   full_name: z.string().trim().min(2, "Name must be at least 2 characters"),
+  phone: z.string().trim().min(1, "Phone number is required"),
+  telegram_id: z.string().trim().min(1, "Telegram ID is required"),
+  instagram: z.string().trim().optional(),
+  discord: z.string().trim().optional(),
 });
 
 export const step2RegisterSchema = z.object({
