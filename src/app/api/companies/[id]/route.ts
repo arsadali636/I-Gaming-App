@@ -163,7 +163,6 @@ export async function GET(
     const ownerUser = company.created_by
       ? (db.prepare("SELECT id, email, full_name, phone, telegram_id, instagram, discord FROM users WHERE id = ?").get(company.created_by) as any)
       : null;
-    const contact_email = (company.contact_email as string) || ownerUser?.email || null;
 
     const companySize = company.company_size_id
       ? db.prepare("SELECT * FROM company_sizes WHERE id = ?").get(company.company_size_id)
@@ -178,29 +177,66 @@ export async function GET(
       : (geos.length > 0 ? { id: geos[0].id, name: geos[0].name, code: geos[0].code, region: geos[0].region } : null);
 
     const user = await getSessionUser();
+    const isOwner = Boolean(user && company.created_by === user.id);
 
-    let revealedIds: string[] = [];
+    let isCompanyUnlocked = false;
+    let revealedContactIds: string[] = [];
+
     if (user) {
-      const revealed = db
-        .prepare("SELECT company_contact_id FROM revealed_contacts WHERE user_id = ?")
+      const companyReveal = db
+        .prepare("SELECT id FROM revealed_contacts WHERE user_id = ? AND company_id = ?")
+        .get(user.id, compId);
+      if (companyReveal) {
+        isCompanyUnlocked = true;
+      }
+
+      const revealedRows = db
+        .prepare("SELECT company_contact_id FROM revealed_contacts WHERE user_id = ? AND company_contact_id IS NOT NULL")
         .all(user.id) as { company_contact_id: string }[];
-      revealedIds = revealed.map((r) => r.company_contact_id);
+      revealedContactIds = revealedRows.map((r) => r.company_contact_id);
     }
 
-    const isOwner = user && company.created_by === user.id;
+    const isAuthorized = isOwner || isCompanyUnlocked;
 
-    const maskedContacts = contacts.map((contact) => {
-      const isRevealed = revealedIds.includes(contact.id as string);
-      if (isRevealed || isOwner) {
-        return contact;
+    // Resolve owner user & contact email safely without leaking private user details
+    const safeOwnerUser = ownerUser
+      ? isAuthorized
+        ? ownerUser
+        : {
+            id: ownerUser.id,
+            full_name: ownerUser.full_name,
+            email: null,
+            phone: null,
+            telegram_id: null,
+            instagram: null,
+            discord: null,
+            locked: true,
+          }
+      : null;
+
+    const rawCompanyContactEmail = (company.contact_email as string)?.trim() || null;
+    const contact_email = isAuthorized
+      ? (rawCompanyContactEmail || ownerUser?.email || null)
+      : (rawCompanyContactEmail && rawCompanyContactEmail !== ownerUser?.email ? rawCompanyContactEmail : null);
+
+    const processedContacts = contacts.map((contact) => {
+      const isContactUnlocked = isAuthorized || revealedContactIds.includes(contact.id as string);
+      if (isContactUnlocked) {
+        return {
+          ...contact,
+          locked: false,
+          is_unlocked: true,
+        };
       }
       return {
         ...contact,
-        email: maskEmail(contact.email as string),
-        phone: contact.phone ? maskPhone(contact.phone as string) : null,
-        linkedin: null,
+        email: null,
+        phone: null,
+        locked: true,
+        is_unlocked: false,
       };
     });
+
 
     const completionItems = [
       { label: "Company Information", completed: Boolean(company.name && company.name !== "My iGaming Company"), weight: 10 },
@@ -230,29 +266,81 @@ export async function GET(
       licenses,
       products,
       services: serviceTypes.length > 0 ? serviceTypes : legacyServices,
-      contacts: maskedContacts,
-      company_contacts: maskedContacts,
-      team: maskedContacts,
+      contacts: processedContacts,
+      company_contacts: processedContacts,
+      team: processedContacts,
       country,
       company_size: companySize || company.employee_count,
       business_role: businessRole,
       completionPercentage,
       completionItems,
-      owner_user: ownerUser,
+      owner_user: safeOwnerUser,
       isOwner: Boolean(isOwner),
+      is_unlocked: isAuthorized,
+      contact_locked: !isAuthorized,
       is_verified: Boolean(company.is_verified === 1 || company.is_verified === true),
       is_featured: Boolean(company.is_featured === 1 || company.is_featured === true),
     };
 
+    let connection_status = "none";
+    let connection_id: string | null = null;
+    let is_connection_requester = false;
+
+    if (user) {
+      let connRow = db
+        .prepare(
+          `SELECT id, status, requester_id FROM connections
+           WHERE ((requester_id = ? AND target_company_id = ?) OR (receiver_id = ? AND target_company_id = ?))
+             AND status IN ('pending', 'accepted')
+           ORDER BY created_at DESC LIMIT 1`
+        )
+        .get(user.id, compId, user.id, compId) as { id: string; status: string; requester_id: string } | undefined;
+
+      if (!connRow && ownerUser?.id) {
+        connRow = db
+          .prepare(
+            `SELECT id, status, requester_id FROM connections
+             WHERE ((requester_id = ? AND receiver_id = ?) OR (requester_id = ? AND receiver_id = ?))
+               AND status IN ('pending', 'accepted')
+             ORDER BY created_at DESC LIMIT 1`
+          )
+          .get(user.id, ownerUser.id, ownerUser.id, user.id) as typeof connRow;
+      }
+
+      if (!connRow) {
+        connRow = db
+          .prepare(
+            `SELECT id, status, requester_id FROM connections
+             WHERE ((requester_id = ? AND target_company_id = ?) OR (receiver_id = ? AND target_company_id = ?))
+             ORDER BY created_at DESC LIMIT 1`
+          )
+          .get(user.id, compId, user.id, compId) as typeof connRow;
+      }
+
+      if (connRow) {
+        connection_status = connRow.status;
+        connection_id = connRow.id;
+        is_connection_requester = connRow.requester_id === user.id;
+      }
+    }
+
+    const companyResponseObj = {
+      ...fullCompanyObj,
+      connection_status,
+      connection_id,
+      is_connection_requester,
+    };
+
     return NextResponse.json(
       {
-        ...fullCompanyObj,
-        company: fullCompanyObj,
-        contacts: maskedContacts,
+        ...companyResponseObj,
+        company: companyResponseObj,
+        contacts: processedContacts,
         licenses,
       },
       { status: 200 }
     );
+
   } catch (err: any) {
     console.error("GET /api/companies/[id] error:", err);
     return NextResponse.json(

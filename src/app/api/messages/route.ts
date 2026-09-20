@@ -6,6 +6,19 @@ import { requireAuth } from "@/lib/auth-local";
 import { messageSchema } from "@/lib/validations";
 import crypto from "crypto";
 
+function isMessagingAuthorized(db: ReturnType<typeof getDb>, userAId: string, userBId: string): boolean {
+  if (!userAId || !userBId) return false;
+  const conn = db
+    .prepare(
+      `SELECT id FROM connections
+       WHERE status = 'accepted'
+         AND ((requester_id = ? AND receiver_id = ?) OR (requester_id = ? AND receiver_id = ?))
+       LIMIT 1`
+    )
+    .get(userAId, userBId, userBId, userAId);
+  return Boolean(conn);
+}
+
 export async function GET(request: Request) {
   try {
     initDb();
@@ -33,6 +46,23 @@ export async function GET(request: Request) {
         );
       }
 
+      const otherUserId = (
+        conversation.participant_1_id === user.id
+          ? conversation.participant_2_id
+          : conversation.participant_1_id
+      ) as string;
+
+      // Strict Messaging Access Control
+      if (!isMessagingAuthorized(db, user.id, otherUserId)) {
+        return NextResponse.json(
+          {
+            error: "Messaging is available only after the connection request is accepted",
+            code: "CONNECTION_REQUIRED",
+          },
+          { status: 403 }
+        );
+      }
+
       const messages = db
         .prepare(
           `SELECT m.*, u.full_name as sender_name, u.avatar_url as sender_avatar
@@ -43,11 +73,6 @@ export async function GET(request: Request) {
            LIMIT ? OFFSET ?`
         )
         .all(conversationId, limit, offset) as Record<string, unknown>[];
-
-      const otherUserId =
-        conversation.participant_1_id === user.id
-          ? conversation.participant_2_id
-          : conversation.participant_1_id;
 
       const otherUser = db
         .prepare("SELECT id, full_name, avatar_url FROM users WHERE id = ?")
@@ -73,30 +98,36 @@ export async function GET(request: Request) {
       )
       .all(user.id, user.id, limit, offset) as Record<string, unknown>[];
 
-    const enriched = conversations.map((conv) => {
-      const isP1 = conv.p1_id === user.id;
-      const otherUser = isP1
-        ? { id: conv.p2_id, full_name: conv.p2_name, avatar_url: conv.p2_avatar }
-        : { id: conv.p1_id, full_name: conv.p1_name, avatar_url: conv.p1_avatar };
+    const enriched = conversations
+      .filter((conv) => {
+        const isP1 = conv.p1_id === user.id;
+        const otherId = (isP1 ? conv.p2_id : conv.p1_id) as string;
+        return isMessagingAuthorized(db, user.id, otherId);
+      })
+      .map((conv) => {
+        const isP1 = conv.p1_id === user.id;
+        const otherUser = isP1
+          ? { id: conv.p2_id, full_name: conv.p2_name, avatar_url: conv.p2_avatar }
+          : { id: conv.p1_id, full_name: conv.p1_name, avatar_url: conv.p1_avatar };
 
-      const lastMsg = db
-        .prepare(
-          `SELECT m.content, m.created_at, m.sender_id
-           FROM messages m WHERE m.conversation_id = ?
-           ORDER BY m.created_at DESC LIMIT 1`
-        )
-        .get(conv.id) as Record<string, unknown> | undefined;
+        const lastMsg = db
+          .prepare(
+            `SELECT m.content, m.created_at, m.sender_id
+             FROM messages m WHERE m.conversation_id = ?
+             ORDER BY m.created_at DESC LIMIT 1`
+          )
+          .get(conv.id) as Record<string, unknown> | undefined;
 
-      return {
-        id: conv.id,
-        participant_1_id: conv.participant_1_id,
-        participant_2_id: conv.participant_2_id,
-        last_message_at: conv.last_message_at ?? conv.created_at,
-        created_at: conv.created_at,
-        other_user: otherUser,
-        last_message: lastMsg ?? null,
-      };
-    });
+        return {
+          id: conv.id,
+          participant_1_id: conv.participant_1_id,
+          participant_2_id: conv.participant_2_id,
+          last_message_at: conv.last_message_at ?? conv.created_at,
+          created_at: conv.created_at,
+          other_user: otherUser,
+          last_message: lastMsg ?? null,
+        };
+      });
 
     return NextResponse.json({ conversations: enriched }, { status: 200 });
   } catch (err: unknown) {
@@ -132,16 +163,44 @@ export async function POST(request: Request) {
       );
     }
 
-    let targetConversationId = conversation_id;
+    let targetConversationId = conversation_id || null;
+    let otherUserId = receiver_id || null;
 
-    if (!targetConversationId && receiver_id) {
+    if (targetConversationId && !otherUserId) {
+      const conv = db
+        .prepare("SELECT participant_1_id, participant_2_id FROM conversations WHERE id = ?")
+        .get(targetConversationId) as { participant_1_id: string; participant_2_id: string } | undefined;
+
+      if (!conv || (conv.participant_1_id !== user.id && conv.participant_2_id !== user.id)) {
+        return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+      }
+
+      otherUserId = conv.participant_1_id === user.id ? conv.participant_2_id : conv.participant_1_id;
+    }
+
+    if (!otherUserId) {
+      return NextResponse.json({ error: "Receiver not found" }, { status: 400 });
+    }
+
+    // Strict Messaging Access Control
+    if (!isMessagingAuthorized(db, user.id, otherUserId)) {
+      return NextResponse.json(
+        {
+          error: "Messaging is available only after the connection request is accepted",
+          code: "CONNECTION_REQUIRED",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (!targetConversationId) {
       const existing = db
         .prepare(
           `SELECT id FROM conversations
            WHERE (participant_1_id = ? AND participant_2_id = ?)
               OR (participant_1_id = ? AND participant_2_id = ?)`
         )
-        .get(user.id, receiver_id, receiver_id, user.id) as
+        .get(user.id, otherUserId, otherUserId, user.id) as
         | { id: string }
         | undefined;
 
@@ -153,24 +212,9 @@ export async function POST(request: Request) {
         db.prepare(
           `INSERT INTO conversations (id, participant_1_id, participant_2_id, created_at)
            VALUES (?, ?, ?, ?)`
-        ).run(convId, user.id, receiver_id, now);
+        ).run(convId, user.id, otherUserId, now);
         targetConversationId = convId;
       }
-    }
-
-    const conv = db
-      .prepare("SELECT * FROM conversations WHERE id = ?")
-      .get(targetConversationId) as Record<string, unknown> | undefined;
-
-    if (
-      !conv ||
-      (conv.participant_1_id !== user.id &&
-        conv.participant_2_id !== user.id)
-    ) {
-      return NextResponse.json(
-        { error: "Conversation not found" },
-        { status: 404 }
-      );
     }
 
     const msgId = crypto.randomUUID();
@@ -186,22 +230,22 @@ export async function POST(request: Request) {
       targetConversationId
     );
 
-    const otherUserId =
-      conv.participant_1_id === user.id
-        ? conv.participant_2_id
-        : conv.participant_1_id;
-
-    const notifId = crypto.randomUUID();
-    db.prepare(
-      `INSERT INTO notifications (id, user_id, title, message, type, is_read, link, created_at)
-       VALUES (?, ?, 'New Message', ?, 'new_message', 0, ?, ?)`
-    ).run(
-      notifId,
-      otherUserId,
-      `You have a new message from ${user.full_name}`,
-      `/messages/${targetConversationId}`,
-      now
-    );
+    // Safe Notification Creation
+    try {
+      const notifId = crypto.randomUUID();
+      db.prepare(
+        `INSERT INTO notifications (id, user_id, title, message, type, is_read, link, created_at)
+         VALUES (?, ?, 'New Message', ?, 'new_message', 0, ?, ?)`
+      ).run(
+        notifId,
+        otherUserId,
+        `You have a new message from ${user.full_name}`,
+        `/messages/${targetConversationId}`,
+        now
+      );
+    } catch (notifErr) {
+      console.error("Error creating notification for message:", notifErr);
+    }
 
     const message = db.prepare("SELECT * FROM messages WHERE id = ?").get(msgId);
 

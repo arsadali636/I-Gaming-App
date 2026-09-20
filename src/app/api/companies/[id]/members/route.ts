@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { initDb, getDb } from "@/lib/db";
-import { requireAuth } from "@/lib/auth-local";
+import { getSessionUser, requireAuth } from "@/lib/auth-local";
 import crypto from "crypto";
 
 export async function GET(
@@ -14,6 +14,25 @@ export async function GET(
     const { id } = await params;
     const db = getDb();
 
+    const user = await getSessionUser();
+
+    const company = db
+      .prepare("SELECT created_by FROM companies WHERE id = ?")
+      .get(id) as { created_by: string } | undefined;
+
+    let isCompanyUnlocked = false;
+    if (user) {
+      const companyReveal = db
+        .prepare("SELECT id FROM revealed_contacts WHERE user_id = ? AND company_id = ?")
+        .get(user.id, id);
+      if (companyReveal) {
+        isCompanyUnlocked = true;
+      }
+    }
+
+    const isOwnerOrMember = Boolean(user && company?.created_by === user.id);
+    const isAuthorized = isOwnerOrMember || isCompanyUnlocked;
+
     const members = db
       .prepare(
         `SELECT cm.*, u.id as user_id, u.full_name, u.email, u.avatar_url
@@ -24,7 +43,14 @@ export async function GET(
       )
       .all(id) as Record<string, unknown>[];
 
-    return NextResponse.json({ members }, { status: 200 });
+    const safeMembers = members.map((m) => ({
+      ...m,
+      email: isAuthorized ? m.email : null,
+      locked: !isAuthorized,
+    }));
+
+    return NextResponse.json({ members: safeMembers }, { status: 200 });
+
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },

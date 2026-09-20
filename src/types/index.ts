@@ -72,7 +72,12 @@ export interface Company {
   serviceTypes?: any[];
   licenses?: any[];
   completionPercentage?: number;
+  is_unlocked?: boolean;
+  contact_locked?: boolean;
+  owner_user?: any;
+  contact_email?: string | null;
 }
+
 
 export interface Category {
   id: string;
@@ -119,10 +124,12 @@ export interface CompanyContact {
   company_id: string;
   full_name: string;
   position: string;
-  email: string;
-  phone?: string;
-  linkedin?: string;
+  email?: string | null;
+  phone?: string | null;
+  linkedin?: string | null;
   is_primary: boolean;
+  locked?: boolean;
+  is_unlocked?: boolean;
 }
 
 export interface CompanyMember {
@@ -179,9 +186,11 @@ export interface ContactCreditTransaction {
 export interface RevealedContact {
   id: string;
   user_id: string;
-  company_contact_id: string;
+  company_contact_id?: string | null;
+  company_id?: string | null;
   revealed_at: string;
 }
+
 
 export interface Connection {
   id: string;

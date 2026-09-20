@@ -13,8 +13,12 @@ import {
   TrendingUp,
   ArrowRight,
   Clock,
+  UserPlus,
+  Check,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/utils";
@@ -284,6 +288,9 @@ export default function DashboardHomePage() {
         <FeaturedOffersWidget />
       </motion.div>
 
+      {/* Connection Requests Widget */}
+      <PendingConnectionRequestsWidget />
+
       {/* Main Content Grid: Recent Activity & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity Card */}
@@ -481,5 +488,133 @@ function FeaturedOffersWidget() {
     </div>
   );
 }
+
+function PendingConnectionRequestsWidget() {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchPendingRequests = async () => {
+    try {
+      const res = await fetch("/api/connections?status=pending&type=received");
+      if (res.ok) {
+        const data = await res.json();
+        setRequests(data.connections || []);
+      }
+    } catch {
+      setRequests([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingRequests();
+  }, []);
+
+  const handleAccept = async (id: string) => {
+    try {
+      const res = await fetch(`/api/connections/${id}/accept`, { method: "POST" });
+      if (res.ok) {
+        setRequests((prev) => prev.filter((r) => r.id !== id));
+      }
+    } catch {}
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      const res = await fetch(`/api/connections/${id}/reject`, { method: "POST" });
+      if (res.ok) {
+        setRequests((prev) => prev.filter((r) => r.id !== id));
+      }
+    } catch {}
+  };
+
+  if (loading || requests.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="bg-gradient-to-b from-[#182137] to-[#0F1524] border border-amber-500/30 rounded-3xl p-6 sm:p-7 shadow-[0_8px_24px_rgba(245,158,11,0.15)] space-y-4"
+    >
+      <div className="flex items-center justify-between border-b border-white/[0.07] pb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/20 border border-amber-500/30 text-amber-400">
+            <UserPlus size={18} />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-[#F8FAFC]">Connection Requests ({requests.length})</h3>
+            <p className="text-xs text-[#94A3B8]">Partners requesting to connect with your company dashboard</p>
+          </div>
+        </div>
+        <Link
+          href="/app/connections"
+          className="inline-flex items-center gap-1 text-xs font-bold text-[#60A5FA] hover:text-[#4F6BFF] transition-colors"
+        >
+          <span>Manage All</span>
+          <ArrowRight size={14} />
+        </Link>
+      </div>
+
+      <div className="space-y-3">
+        {requests.map((req) => (
+          <div
+            key={req.id}
+            className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-[#111726] border border-white/[0.06] gap-4"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              {req.requester?.avatar_url || req.requester?.company_logo ? (
+                <img
+                  src={req.requester?.avatar_url || req.requester?.company_logo}
+                  alt={req.requester?.full_name}
+                  className="w-10 h-10 rounded-xl object-cover shrink-0 border border-white/10"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#4F6BFF] to-[#3B54E6] flex items-center justify-center text-white text-sm font-bold shrink-0">
+                  {req.requester?.full_name?.charAt(0) || "U"}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-extrabold text-white truncate">
+                  {req.requester?.full_name}
+                </p>
+                {req.requester?.company_name && (
+                  <p className="text-[11px] text-[#94A3B8] truncate">
+                    {req.requester?.company_name}
+                  </p>
+                )}
+                <p className="text-[10px] text-[#64748B] mt-0.5">
+                  Requested {formatDate(req.created_at)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                className="bg-[#10B981] hover:bg-[#059669] text-white font-bold gap-1 rounded-xl text-xs px-4"
+                onClick={() => handleAccept(req.id)}
+              >
+                <Check size={14} />
+                <span>Accept</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/15 text-slate-300 hover:text-white hover:bg-white/10 gap-1 rounded-xl text-xs px-3"
+                onClick={() => handleReject(req.id)}
+              >
+                <X size={14} />
+                <span>Reject</span>
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
 
 

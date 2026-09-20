@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -26,9 +26,8 @@ import {
   ExternalLink,
   Newspaper,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getInitials, formatDate } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { getInitials } from "@/lib/utils";
 
 interface DashboardHeaderProps {
   title?: string;
@@ -44,8 +43,9 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
   const [offersMenuOpen, setOffersMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [dbNotifications, setDbNotifications] = useState<Array<{ id: string; title: string; message: string; type: string; is_read: number; link?: string; created_at: string }>>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const notificationCount = 3;
 
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
@@ -57,6 +57,48 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
     setMoreMenuOpen(false);
     setOffersMenuOpen(false);
   }, [pathname]);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        setDbNotifications(data.notifications || []);
+        setUnreadNotifCount(data.unread_count || 0);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  const handleNotifClick = async (notif: { id: string; link?: string }) => {
+    try {
+      await fetch("/api/notifications/mark-read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notification_id: notif.id }),
+      });
+      setDbNotifications((prev) =>
+        prev.map((n) => (n.id === notif.id ? { ...n, is_read: 1 } : n))
+      );
+      setUnreadNotifCount((prev) => Math.max(0, prev - 1));
+    } catch {}
+    if (notif.link) {
+      window.location.href = notif.link;
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await fetch("/api/notifications/mark-read", { method: "POST" });
+      setDbNotifications((prev) => prev.map((n) => ({ ...n, is_read: 1 })));
+      setUnreadNotifCount(0);
+    } catch {}
+  };
 
   // Fetch real unread message count
   useEffect(() => {
@@ -353,7 +395,9 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
         <div className="relative">
           <button
             onClick={() => {
-              setNotificationsOpen(!notificationsOpen);
+              const nextState = !notificationsOpen;
+              setNotificationsOpen(nextState);
+              if (nextState) fetchNotifications();
               setUserMenuOpen(false);
               setMoreMenuOpen(false);
             }}
@@ -361,7 +405,7 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
             aria-label="Notifications"
           >
             <Bell className="h-4 w-4" />
-            {notificationCount > 0 && (
+            {unreadNotifCount > 0 && (
               <span className="absolute right-1.5 top-1.5 flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#60A5FA] opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-[#4F6BFF]" />
@@ -383,32 +427,56 @@ export default function DashboardHeader({ title }: DashboardHeaderProps) {
                     <h3 className="text-xs font-bold text-[#F8FAFC]">
                       Notifications
                     </h3>
-                    <span className="rounded-full bg-[#4F6BFF]/20 px-2 py-0.5 text-[10px] font-bold text-[#60A5FA]">
-                      3 New
-                    </span>
+                    {unreadNotifCount > 0 && (
+                      <span className="rounded-full bg-[#4F6BFF]/20 px-2 py-0.5 text-[10px] font-bold text-[#60A5FA]">
+                        {unreadNotifCount} New
+                      </span>
+                    )}
                   </div>
+                  {unreadNotifCount > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-[10px] text-[#94A3B8] hover:text-white transition-colors cursor-pointer"
+                    >
+                      Mark all read
+                    </button>
+                  )}
                 </div>
                 <div className="max-h-80 overflow-y-auto divide-y divide-white/[0.04]">
-                  {[
-                    { title: "New B2B Offer Available", time: "10 mins ago", type: "Offer" },
-                    { title: "New connection request received", time: "1 hour ago", type: "Network" },
-                    { title: "Upcoming iGaming Event: Summit 2026", time: "3 hours ago", type: "Event" },
-                  ].map((notif, i) => (
-                    <div
-                      key={i}
-                      className="px-5 py-3 transition-colors hover:bg-white/[0.03] cursor-pointer flex gap-3 items-start"
-                    >
-                      <div className="w-2 h-2 mt-1.5 rounded-full bg-[#4F6BFF] shrink-0" />
-                      <div>
-                        <p className="text-xs font-medium text-[#F8FAFC]">
-                          {notif.title}
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-[#94A3B8]">
-                          {notif.time} • {notif.type}
-                        </p>
-                      </div>
+                  {dbNotifications.length === 0 ? (
+                    <div className="px-5 py-6 text-center text-xs text-[#94A3B8]">
+                      No notifications yet.
                     </div>
-                  ))}
+                  ) : (
+                    dbNotifications.map((notif) => (
+                      <div
+                        key={notif.id}
+                        onClick={() => handleNotifClick(notif)}
+                        className={cn(
+                          "px-5 py-3 transition-colors hover:bg-white/[0.03] cursor-pointer flex gap-3 items-start",
+                          notif.is_read === 0 && "bg-[#4F6BFF]/[0.05]"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "w-2 h-2 mt-1.5 rounded-full shrink-0",
+                            notif.is_read === 0 ? "bg-[#4F6BFF]" : "bg-white/20"
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-[#F8FAFC] truncate">
+                            {notif.title}
+                          </p>
+                          <p className="text-[11px] text-[#94A3B8] mt-0.5 line-clamp-2">
+                            {notif.message}
+                          </p>
+                          <p className="mt-1 text-[10px] text-[#64748B]">
+                            {formatDate(notif.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </motion.div>
             )}

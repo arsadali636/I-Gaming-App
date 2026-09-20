@@ -24,34 +24,50 @@ export async function GET(
 
     const user = await getSessionUser();
 
-    let revealedIds: string[] = [];
+    let isCompanyUnlocked = false;
+    let revealedContactIds: string[] = [];
+
     if (user) {
-      const revealed = db
-        .prepare("SELECT company_contact_id FROM revealed_contacts WHERE user_id = ?")
+      const companyReveal = db
+        .prepare("SELECT id FROM revealed_contacts WHERE user_id = ? AND company_id = ?")
+        .get(user.id, id);
+      if (companyReveal) {
+        isCompanyUnlocked = true;
+      }
+
+      const revealedRows = db
+        .prepare("SELECT company_contact_id FROM revealed_contacts WHERE user_id = ? AND company_contact_id IS NOT NULL")
         .all(user.id) as { company_contact_id: string }[];
-      revealedIds = revealed.map((r) => r.company_contact_id);
+      revealedContactIds = revealedRows.map((r) => r.company_contact_id);
     }
 
     const company = db
       .prepare("SELECT created_by FROM companies WHERE id = ?")
       .get(id) as { created_by: string } | undefined;
 
-    const isOwnerOrMember = company?.created_by === user?.id;
+    const isOwnerOrMember = Boolean(user && company?.created_by === user.id);
+    const isAuthorized = isOwnerOrMember || isCompanyUnlocked;
 
-    const maskedContacts = contacts.map((contact) => {
-      const isRevealed = revealedIds.includes(contact.id as string);
-      if (isRevealed || isOwnerOrMember) {
-        return contact;
+    const processedContacts = contacts.map((contact) => {
+      const isContactUnlocked = isAuthorized || revealedContactIds.includes(contact.id as string);
+      if (isContactUnlocked) {
+        return {
+          ...contact,
+          locked: false,
+          is_unlocked: true,
+        };
       }
       return {
         ...contact,
-        email: maskEmail(contact.email as string),
-        phone: contact.phone ? maskPhone(contact.phone as string) : null,
-        linkedin: null,
+        email: null,
+        phone: null,
+        locked: true,
+        is_unlocked: false,
       };
     });
 
-    return NextResponse.json({ contacts: maskedContacts }, { status: 200 });
+    return NextResponse.json({ contacts: processedContacts }, { status: 200 });
+
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },

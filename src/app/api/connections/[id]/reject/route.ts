@@ -5,8 +5,8 @@ import { initDb, getDb, isUserAuthorizedCompanyAdmin } from "@/lib/db";
 import { requireAuth } from "@/lib/auth-local";
 import crypto from "crypto";
 
-export async function PUT(
-  request: Request,
+export async function POST(
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -14,25 +14,13 @@ export async function PUT(
     const user = await requireAuth();
     const { id } = await params;
     const db = getDb();
-    const body = await request.json();
-    const { status } = body;
-
-    if (!status || !["accepted", "rejected"].includes(status)) {
-      return NextResponse.json(
-        { error: "Status must be 'accepted' or 'rejected'" },
-        { status: 400 }
-      );
-    }
 
     const connection = db
       .prepare("SELECT * FROM connections WHERE id = ?")
       .get(id) as { id: string; requester_id: string; target_company_id?: string; receiver_id: string; status: string } | undefined;
 
     if (!connection) {
-      return NextResponse.json(
-        { error: "Connection request not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Connection request not found" }, { status: 404 });
     }
 
     if (connection.status !== "pending") {
@@ -43,7 +31,7 @@ export async function PUT(
     }
 
     // Strict Authorization Check: Must be company owner or admin of target_company_id
-    // receiver_id MUST NEVER independently grant permission to accept or reject
+    // receiver_id MUST NEVER independently grant permission to reject
     const targetCompId = connection.target_company_id;
     const isAuthorized = targetCompId
       ? isUserAuthorizedCompanyAdmin(user.id, targetCompId)
@@ -51,7 +39,7 @@ export async function PUT(
 
     if (!isAuthorized) {
       return NextResponse.json(
-        { error: "Only authorized company owners and admins can respond to connection requests" },
+        { error: "Only authorized company owners and admins can reject connection requests" },
         { status: 403 }
       );
     }
@@ -60,9 +48,9 @@ export async function PUT(
 
     const result = db
       .prepare(
-        "UPDATE connections SET status = ?, responded_at = ?, updated_at = ? WHERE id = ? AND status = 'pending'"
+        "UPDATE connections SET status = 'rejected', responded_at = ?, updated_at = ? WHERE id = ? AND status = 'pending'"
       )
-      .run(status, now, now, id);
+      .run(now, now, id);
 
     if (result.changes === 0) {
       return NextResponse.json(
@@ -74,18 +62,12 @@ export async function PUT(
     // Safe Notification Creation
     try {
       const notifId = crypto.randomUUID();
-      const title = status === "accepted" ? "Connection Accepted" : "Connection Update";
-      const msg = status === "accepted"
-        ? "Your connection request has been accepted!"
-        : "Your connection request was declined.";
-      const notifType = status === "accepted" ? "connection_accepted" : "connection_rejected";
-
       db.prepare(
         `INSERT INTO notifications (id, user_id, title, message, type, is_read, link, created_at)
-         VALUES (?, ?, ?, ?, ?, 0, '/app/connections', ?)`
-      ).run(notifId, connection.requester_id, title, msg, notifType, now);
+         VALUES (?, ?, 'Connection Update', 'Your connection request was declined.', 'connection_rejected', 0, '/app/connections', ?)`
+      ).run(notifId, connection.requester_id, now);
     } catch (notifErr) {
-      console.error("Error creating notification for connection PUT:", notifErr);
+      console.error("Error creating notification for connection reject:", notifErr);
     }
 
     const updated = db.prepare("SELECT * FROM connections WHERE id = ?").get(id);

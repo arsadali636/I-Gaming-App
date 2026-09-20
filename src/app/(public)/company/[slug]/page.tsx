@@ -21,6 +21,10 @@ import {
   Mail,
   Phone,
   Send,
+  UserPlus,
+  UserCheck,
+  Clock,
+  Lock,
   Camera,
   MessageSquare,
 } from "lucide-react";
@@ -28,6 +32,7 @@ import { getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/hooks/use-auth";
 import { apiClient } from "@/lib/api-client";
 
 const FLAG_MAP: Record<string, string> = {
@@ -84,8 +89,11 @@ export default function PublicCompanyProfilePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
+  const { user } = useAuth();
   const [company, setCompany] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "accepted" | "rejected">("none");
+  const [submittingConnect, setSubmittingConnect] = useState(false);
 
   useEffect(() => {
     async function fetchCompany() {
@@ -99,6 +107,9 @@ export default function PublicCompanyProfilePage({
         if (json) {
           const compObj = json.company ?? json;
           setCompany(compObj);
+          if (compObj.connection_status) {
+            setConnectionStatus(compObj.connection_status);
+          }
         }
       } catch {
         // silent
@@ -108,6 +119,30 @@ export default function PublicCompanyProfilePage({
     }
     fetchCompany();
   }, [slug]);
+
+  const handleConnectClick = async () => {
+    if (!user || !company?.id || submittingConnect) return;
+    setSubmittingConnect(true);
+    try {
+      const res = await fetch("/api/connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: company.id }),
+      });
+      if (res.ok || res.status === 201) {
+        setConnectionStatus("pending");
+      } else if (res.status === 409) {
+        const errJson = await res.json().catch(() => ({}));
+        if (errJson?.error?.includes("Already connected")) {
+          setConnectionStatus("accepted");
+        } else {
+          setConnectionStatus("pending");
+        }
+      }
+    } catch {} finally {
+      setSubmittingConnect(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -371,97 +406,166 @@ export default function PublicCompanyProfilePage({
                 <Mail size={18} className="text-[#60A5FA]" />
                 Contact Information
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {(company.contact_email || company.owner_user?.email) && (
-                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#4F6BFF]/15 text-[#60A5FA]">
-                      <Mail size={16} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</p>
-                      <p className="text-xs font-bold text-white truncate">
-                        {company.contact_email || company.owner_user?.email}
-                      </p>
-                    </div>
+              {company.contact_locked || !company.is_unlocked ? (
+                <div className="py-8 px-4 text-center space-y-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                  <div className="w-12 h-12 rounded-2xl bg-[#4F6BFF]/15 border border-[#4F6BFF]/30 flex items-center justify-center text-[#60A5FA] mx-auto">
+                    <Shield className="text-[#60A5FA]" size={22} />
                   </div>
-                )}
+                  <div>
+                    <h4 className="text-sm font-bold text-white">🔒 Private Contact Information</h4>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                      Contact details (Email, Phone, Telegram, Instagram, Discord) are available after using 1 credit to reveal.
+                    </p>
+                  </div>
+                  <Link href="/login" className="inline-block pt-1">
+                    <Button className="bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold text-xs px-5 py-2 rounded-xl gap-1.5 shadow-md">
+                      Sign In to Reveal Details
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {(company.contact_email || company.owner_user?.email) && (
+                    <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#4F6BFF]/15 text-[#60A5FA]">
+                        <Mail size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</p>
+                        <p className="text-xs font-bold text-white truncate">
+                          {company.contact_email || company.owner_user?.email}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
-                {(company.owner_user?.phone || company.phone) && (
-                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#10B981]/15 text-[#10B981]">
-                      <Phone size={16} />
+                  {(company.owner_user?.phone || company.phone) && (
+                    <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#10B981]/15 text-[#10B981]">
+                        <Phone size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Phone</p>
+                        <p className="text-xs font-bold text-white truncate">
+                          {company.owner_user?.phone || company.phone}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Phone</p>
-                      <p className="text-xs font-bold text-white truncate">
-                        {company.owner_user?.phone || company.phone}
-                      </p>
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {company.owner_user?.telegram_id && (
-                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#22C1DC]/15 text-[#22C1DC]">
-                      <Send size={16} />
+                  {company.owner_user?.telegram_id && (
+                    <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#22C1DC]/15 text-[#22C1DC]">
+                        <Send size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Telegram</p>
+                        <p className="text-xs font-bold text-white truncate">
+                          {company.owner_user.telegram_id}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Telegram</p>
-                      <p className="text-xs font-bold text-white truncate">
-                        {company.owner_user.telegram_id}
-                      </p>
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {company.owner_user?.instagram && (
-                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E1306C]/15 text-[#E1306C]">
-                      <Camera size={16} />
+                  {company.owner_user?.instagram && (
+                    <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E1306C]/15 text-[#E1306C]">
+                        <Camera size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Instagram</p>
+                        <p className="text-xs font-bold text-white truncate">
+                          {company.owner_user.instagram}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Instagram</p>
-                      <p className="text-xs font-bold text-white truncate">
-                        {company.owner_user.instagram}
-                      </p>
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {company.owner_user?.discord && (
-                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#5865F2]/15 text-[#5865F2]">
-                      <MessageSquare size={16} />
+                  {company.owner_user?.discord && (
+                    <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#5865F2]/15 text-[#5865F2]">
+                        <MessageSquare size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discord</p>
+                        <p className="text-xs font-bold text-white truncate">
+                          {company.owner_user.discord}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discord</p>
-                      <p className="text-xs font-bold text-white truncate">
-                        {company.owner_user.discord}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </Card>
+
           </div>
 
           {/* Right Sidebar */}
           <div className="space-y-6">
             <Card className="border border-white/10 bg-[#111827] p-6 rounded-2xl space-y-4">
               <h3 className="text-sm font-bold text-white">Connect with {company.name}</h3>
-              <p className="text-xs text-slate-400">
-                Register or log in to contact this verified iGaming partner directly.
-              </p>
-              <Link href="/register" className="block">
-                <Button className="w-full bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold rounded-xl">
-                  Sign Up to Connect
-                </Button>
-              </Link>
-              <Link href="/login" className="block">
-                <Button variant="outline" className="w-full border-white/15 text-white hover:bg-white/10 rounded-xl">
-                  Log In
-                </Button>
-              </Link>
+              {user ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400">
+                    Send a connection request to engage in B2B discussions with {company.name}.
+                  </p>
+                  {connectionStatus === "accepted" ? (
+                    <Button disabled className="w-full bg-[#10B981]/20 border border-[#10B981]/40 text-[#10B981] font-bold rounded-xl gap-2 cursor-default">
+                      <UserCheck size={16} />
+                      <span>Connected</span>
+                    </Button>
+                  ) : connectionStatus === "pending" ? (
+                    <Button disabled className="w-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold rounded-xl gap-2 cursor-default">
+                      <Clock size={16} />
+                      <span>Request Pending</span>
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleConnectClick}
+                      disabled={submittingConnect}
+                      className="w-full bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold rounded-xl gap-2 shadow-lg shadow-[#4F6BFF]/25"
+                    >
+                      <UserPlus size={16} />
+                      <span>{submittingConnect ? "Sending..." : "Connect"}</span>
+                    </Button>
+                  )}
+
+                  {connectionStatus === "accepted" ? (
+                    <Link href={`/app/messages?receiver_id=${company.owner_user?.id || ""}`} className="block">
+                      <Button className="w-full bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold rounded-xl gap-2">
+                        <MessageSquare size={16} />
+                        <span>Open Messaging</span>
+                      </Button>
+                    </Link>
+                  ) : (
+                    <div className="space-y-1">
+                      <Button disabled variant="outline" className="w-full border-white/10 bg-white/[0.02] text-slate-500 rounded-xl gap-2 opacity-60 cursor-not-allowed">
+                        <Lock size={15} />
+                        <span>Message Disabled</span>
+                      </Button>
+                      <p className="text-[11px] text-amber-400/90 text-center font-semibold pt-0.5">
+                        🔒 Messaging available only after request is accepted
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400">
+                    Register or log in to contact this verified iGaming partner directly.
+                  </p>
+                  <Link href="/register" className="block">
+                    <Button className="w-full bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold rounded-xl">
+                      Sign Up to Connect
+                    </Button>
+                  </Link>
+                  <Link href="/login" className="block">
+                    <Button variant="outline" className="w-full border-white/15 text-white hover:bg-white/10 rounded-xl">
+                      Log In
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </Card>
           </div>
         </div>

@@ -750,6 +750,40 @@ export function initDb(): Database.Database {
     console.error("Error migrating offers table columns:", migErr);
   }
 
+  try {
+    const revTableInfo = database.prepare("PRAGMA table_info(revealed_contacts)").all() as { name: string }[];
+    const revColNames = revTableInfo.map((col) => col.name);
+    if (!revColNames.includes("company_id")) {
+      database.exec("ALTER TABLE revealed_contacts ADD COLUMN company_id TEXT REFERENCES companies(id) ON DELETE CASCADE");
+    }
+    database.exec("CREATE INDEX IF NOT EXISTS idx_revealed_contacts_user_company ON revealed_contacts(user_id, company_id)");
+    database.exec("CREATE INDEX IF NOT EXISTS idx_revealed_contacts_user_contact ON revealed_contacts(user_id, company_contact_id)");
+  } catch (migErr) {
+    console.error("Error migrating revealed_contacts table columns:", migErr);
+    throw migErr;
+  }
+
+  try {
+    const connTableInfo = database.prepare("PRAGMA table_info(connections)").all() as { name: string }[];
+    const connColNames = connTableInfo.map((col) => col.name);
+    if (!connColNames.includes("target_company_id")) {
+      database.exec("ALTER TABLE connections ADD COLUMN target_company_id TEXT REFERENCES companies(id)");
+    }
+    if (!connColNames.includes("responded_at")) {
+      database.exec("ALTER TABLE connections ADD COLUMN responded_at TEXT");
+    }
+    database.exec("CREATE INDEX IF NOT EXISTS idx_connections_receiver ON connections(receiver_id);");
+    database.exec("CREATE INDEX IF NOT EXISTS idx_connections_target_company ON connections(target_company_id);");
+    database.exec("CREATE INDEX IF NOT EXISTS idx_connections_status ON connections(status);");
+    database.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_connections_active_req ON connections(requester_id, target_company_id) WHERE status IN ('pending', 'accepted');"
+    );
+  } catch (migErr) {
+    console.error("Error migrating connections table columns:", migErr);
+  }
+
+
+
   // Seed default business roles if empty
   try {
     const roleCount = (database.prepare("SELECT COUNT(*) as count FROM business_roles").get() as { count: number }).count;
@@ -1004,3 +1038,121 @@ export function initDb(): Database.Database {
 
   return database;
 }
+
+export function getAuthorizedCompanyIdsForUser(userId: string): string[] {
+  if (!userId) return [];
+  const db = getDb();
+  
+  const createdRows = db
+    .prepare("SELECT id FROM companies WHERE created_by = ?")
+    .all(userId) as { id: string }[];
+
+  const memberRows = db
+    .prepare(
+      "SELECT company_id as id FROM company_members WHERE user_id = ? AND role IN ('owner', 'admin')"
+    )
+    .all(userId) as { id: string }[];
+
+  const userRow = db
+    .prepare("SELECT company_id, role FROM users WHERE id = ?")
+    .get(userId) as { company_id?: string; role?: string } | undefined;
+
+  const set = new Set<string>();
+  for (const r of createdRows) if (r.id) set.add(r.id);
+  for (const r of memberRows) if (r.id) set.add(r.id);
+
+  if (userRow?.company_id && userRow.role && ["company_owner", "admin", "super_admin"].includes(userRow.role)) {
+    set.add(userRow.company_id);
+  }
+
+  return Array.from(set);
+}
+
+export function isUserAuthorizedCompanyAdmin(userId: string, companyId: string): boolean {
+  if (!userId || !companyId) return false;
+  const db = getDb();
+
+  const comp = db
+    .prepare("SELECT created_by FROM companies WHERE id = ?")
+    .get(companyId) as { created_by?: string } | undefined;
+  if (comp && comp.created_by === userId) {
+    return true;
+  }
+
+  const member = db
+    .prepare(
+      "SELECT id FROM company_members WHERE company_id = ? AND user_id = ? AND role IN ('owner', 'admin')"
+    )
+    .get(companyId, userId);
+  if (member) {
+    return true;
+  }
+
+  const userRow = db
+    .prepare("SELECT company_id, role FROM users WHERE id = ?")
+    .get(userId) as { company_id?: string; role?: string } | undefined;
+  if (userRow?.company_id === companyId && userRow.role && ["company_owner", "admin", "super_admin"].includes(userRow.role)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function getCompanyAdminUserIds(companyId: string): string[] {
+  if (!companyId) return [];
+  const db = getDb();
+  const set = new Set<string>();
+
+  const comp = db
+    .prepare("SELECT created_by FROM companies WHERE id = ?")
+    .get(companyId) as { created_by?: string } | undefined;
+  if (comp?.created_by) set.add(comp.created_by);
+
+  const members = db
+    .prepare("SELECT user_id FROM company_members WHERE company_id = ? AND role IN ('owner', 'admin')")
+    .all(companyId) as { user_id: string }[];
+  for (const m of members) if (m.user_id) set.add(m.user_id);
+
+  const users = db
+    .prepare("SELECT id FROM users WHERE company_id = ? AND role IN ('company_owner', 'admin', 'super_admin')")
+    .all(companyId) as { id: string }[];
+  for (const u of users) if (u.id) set.add(u.id);
+
+  return Array.from(set);
+}
+
+export function getCompanyRepresentativeUser(companyId: string): string | null {
+  if (!companyId) return null;
+  const db = getDb();
+
+  const comp = db
+    .prepare("SELECT created_by FROM companies WHERE id = ?")
+    .get(companyId) as { created_by?: string } | undefined;
+  if (comp?.created_by) {
+    return comp.created_by;
+  }
+
+  const ownerMember = db
+    .prepare("SELECT user_id FROM company_members WHERE company_id = ? AND role = 'owner' ORDER BY created_at ASC LIMIT 1")
+    .get(companyId) as { user_id: string } | undefined;
+  if (ownerMember?.user_id) {
+    return ownerMember.user_id;
+  }
+
+  const adminMember = db
+    .prepare("SELECT user_id FROM company_members WHERE company_id = ? AND role = 'admin' ORDER BY created_at ASC LIMIT 1")
+    .get(companyId) as { user_id: string } | undefined;
+  if (adminMember?.user_id) {
+    return adminMember.user_id;
+  }
+
+  const userComp = db
+    .prepare("SELECT id FROM users WHERE company_id = ? ORDER BY created_at ASC LIMIT 1")
+    .get(companyId) as { id: string } | undefined;
+  if (userComp?.id) {
+    return userComp.id;
+  }
+
+  return null;
+}
+

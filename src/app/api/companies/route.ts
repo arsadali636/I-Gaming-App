@@ -209,9 +209,14 @@ export async function GET(request: Request) {
 
       const completionPercentage = Math.min(100, completedWeight);
 
+      const rawCompEmail = (row.contact_email as string)?.trim() || null;
+      const safeContactEmail = rawCompEmail && rawCompEmail !== row.owner_email ? rawCompEmail : null;
+      const { owner_email: _, ...cleanRow } = row;
+
       return {
-        ...row,
-        contact_email: row.contact_email || row.owner_email || null,
+        ...cleanRow,
+        contact_email: safeContactEmail,
+
         categories: cats,
         category_ids: cats.map((c) => c.id),
         topGeos,

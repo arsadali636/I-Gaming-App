@@ -8,6 +8,9 @@ import {
   ArrowLeft,
   Eye,
   UserPlus,
+  UserCheck,
+  Clock,
+  Lock,
   MessageSquare,
   Bookmark,
   BookmarkCheck,
@@ -41,10 +44,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { getInitials } from "@/lib/utils";
 import type { CompanyContact } from "@/types";
 import { apiClient } from "@/lib/api-client";
+
 
 const FLAG_MAP: Record<string, string> = {
   MT: "🇲🇹", GB: "🇬🇧", US: "🇺🇸", DE: "🇩🇪", FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸", SE: "🇸🇪", NO: "🇳🇴",
@@ -109,9 +114,13 @@ export default function CompanyDetailPage({
   const [saved, setSaved] = useState(false);
   const [savedRecordId, setSavedRecordId] = useState<string | null>(null);
   const [revealingContactId, setRevealingContactId] = useState<string | null>(null);
+  const [isRevealingCompany, setIsRevealingCompany] = useState(false);
+  const [showInsufficientModal, setShowInsufficientModal] = useState(false);
   const [revealError, setRevealError] = useState<string | null>(null);
   const [revealSuccess, setRevealSuccess] = useState<string | null>(null);
   const [revealCost] = useState(1);
+  const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "accepted" | "rejected">("none");
+  const [submittingConnect, setSubmittingConnect] = useState(false);
 
   useEffect(() => {
     async function fetchCompanyData() {
@@ -125,6 +134,9 @@ export default function CompanyDetailPage({
         if (data) {
           const compObj = data.company ?? data;
           setCompany(compObj);
+          if (compObj.connection_status) {
+            setConnectionStatus(compObj.connection_status);
+          }
           const compId = compObj.id || id;
           const compSlug = compObj.slug || id;
 
@@ -174,6 +186,30 @@ export default function CompanyDetailPage({
     fetchCompanyData();
   }, [id]);
 
+  const handleConnectClick = async () => {
+    if (!company?.id || submittingConnect) return;
+    setSubmittingConnect(true);
+    try {
+      const res = await fetch("/api/connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: company.id }),
+      });
+      if (res.ok || res.status === 201) {
+        setConnectionStatus("pending");
+      } else if (res.status === 409) {
+        const errJson = await res.json().catch(() => ({}));
+        if (errJson?.error?.includes("Already connected")) {
+          setConnectionStatus("accepted");
+        } else {
+          setConnectionStatus("pending");
+        }
+      }
+    } catch {} finally {
+      setSubmittingConnect(false);
+    }
+  };
+
   const handleToggleSave = async () => {
     if (!company) return;
     const wasSaved = saved;
@@ -218,43 +254,110 @@ export default function CompanyDetailPage({
     }
   };
 
+  const handleRevealCompany = async () => {
+    if (!company) return;
+    setIsRevealingCompany(true);
+    setRevealError(null);
+    setRevealSuccess(null);
+
+    try {
+      const res: any = await apiClient.post("/api/contacts/reveal", {
+        company_id: company.id,
+      });
+
+      if (res.contactAvailable === false) {
+        setRevealError(res.message || "Target has no private contact information available.");
+        return;
+      }
+
+      setCompany((prev: any) => ({
+        ...prev,
+        is_unlocked: true,
+        contact_locked: false,
+        owner_user: res.owner_user || prev?.owner_user,
+        contact_email: res.contact_email || prev?.contact_email,
+        contacts: res.contacts || prev?.contacts,
+      }));
+
+      if (Array.isArray(res.contacts)) {
+        setContacts(res.contacts);
+      }
+
+      setRevealSuccess("Company contact details revealed successfully!");
+      if (refreshWallet) refreshWallet();
+    } catch (err: any) {
+      const status = err?.status;
+      const code = err?.data?.code;
+      const msg = err?.data?.error || err?.message || "Failed to reveal contact details.";
+
+      if (status === 402 || code === "INSUFFICIENT_CREDITS" || msg.toLowerCase().includes("insufficient")) {
+        setShowInsufficientModal(true);
+      } else if (status === 401) {
+        setRevealError("Please sign in to reveal contact information.");
+      } else if (status === 404) {
+        setRevealError("Target company or contact information not found.");
+      } else {
+        setRevealError(msg);
+      }
+    } finally {
+      setIsRevealingCompany(false);
+    }
+  };
+
   const handleRevealContact = async (contactId: string) => {
     setRevealingContactId(contactId);
     setRevealError(null);
     setRevealSuccess(null);
 
     try {
-      const res = await apiClient.post<any>("/api/v1/contacts/reveal/", {
+      const res: any = await apiClient.post("/api/contacts/reveal", {
         contact_id: contactId,
       });
 
-      const updatedDetail = res.company_contact_detail || res.contact || res;
-      setContacts((prev) =>
-        prev.map((c) =>
-          c.id === contactId
-            ? {
-                ...c,
-                email: updatedDetail.email || c.email,
-                phone: updatedDetail.phone || c.phone,
-                is_unlocked: true,
-              }
-            : c
-        )
-      );
+      if (res.contactAvailable === false) {
+        setRevealError("No contact details available.");
+        return;
+      }
+
+      setCompany((prev: any) => ({
+        ...prev,
+        is_unlocked: true,
+        contact_locked: false,
+        owner_user: res.owner_user || prev?.owner_user,
+        contact_email: res.contact_email || prev?.contact_email,
+      }));
+
+      if (Array.isArray(res.contacts)) {
+        setContacts(res.contacts);
+      } else {
+        setContacts((prev) =>
+          prev.map((c) =>
+            c.id === contactId ? { ...c, is_unlocked: true, locked: false } : c
+          )
+        );
+      }
+
       setRevealSuccess("Contact revealed successfully!");
       if (refreshWallet) refreshWallet();
     } catch (err: any) {
-      if (err?.status === 402) {
-        setRevealError("Insufficient contact credits. Please purchase additional credits.");
-      } else if (err?.status === 403) {
-        setRevealError("An active subscription is required to reveal contact details.");
+      const status = err?.status;
+      const code = err?.data?.code;
+      const msg = err?.data?.error || err?.message || "Failed to reveal contact.";
+
+      if (status === 402 || code === "INSUFFICIENT_CREDITS" || msg.toLowerCase().includes("insufficient")) {
+        setShowInsufficientModal(true);
+      } else if (status === 401) {
+        setRevealError("Please sign in to reveal contact information.");
+      } else if (status === 404) {
+        setRevealError("Target contact information not found.");
       } else {
-        setRevealError(err?.data?.error || "Failed to reveal contact.");
+        setRevealError(msg);
       }
     } finally {
       setRevealingContactId(null);
     }
   };
+
 
   if (loading) {
     return (
@@ -478,14 +581,41 @@ export default function CompanyDetailPage({
 
                 {/* Primary Actions Row */}
                 <div className="flex flex-wrap items-center gap-3 pt-2">
-                  <Button className="bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold gap-2 px-5 py-2.5 rounded-xl shadow-lg shadow-[#4F6BFF]/25">
-                    <UserPlus size={16} />
-                    <span>Connect</span>
-                  </Button>
-                  <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10 gap-2 px-5 py-2.5 rounded-xl">
-                    <MessageSquare size={16} />
-                    <span>Message</span>
-                  </Button>
+                  {connectionStatus === "accepted" ? (
+                    <Button disabled className="bg-[#10B981]/20 border border-[#10B981]/40 text-[#10B981] font-bold gap-2 px-5 py-2.5 rounded-xl cursor-default">
+                      <UserCheck size={16} />
+                      <span>Connected</span>
+                    </Button>
+                  ) : connectionStatus === "pending" ? (
+                    <Button disabled className="bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold gap-2 px-5 py-2.5 rounded-xl cursor-default">
+                      <Clock size={16} />
+                      <span>Request Pending</span>
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleConnectClick}
+                      disabled={submittingConnect}
+                      className="bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold gap-2 px-5 py-2.5 rounded-xl shadow-lg shadow-[#4F6BFF]/25"
+                    >
+                      <UserPlus size={16} />
+                      <span>{submittingConnect ? "Sending..." : "Connect"}</span>
+                    </Button>
+                  )}
+
+                  {connectionStatus === "accepted" ? (
+                    <Link href={`/app/messages?receiver_id=${company?.owner_user?.id || ""}`}>
+                      <Button className="bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold gap-2 px-5 py-2.5 rounded-xl shadow-md">
+                        <MessageSquare size={16} />
+                        <span>Message</span>
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Button disabled variant="outline" className="border-white/10 bg-white/[0.02] text-slate-500 gap-2 px-5 py-2.5 rounded-xl opacity-60 cursor-not-allowed">
+                      <Lock size={15} />
+                      <span>Message (Locked)</span>
+                    </Button>
+                  )}
+
                   <Button
                     variant="outline"
                     onClick={handleToggleSave}
@@ -711,80 +841,104 @@ export default function CompanyDetailPage({
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(company.contact_email || company.owner_user?.email) && (
-                    <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#4F6BFF]/15 text-[#60A5FA]">
-                        <Mail size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</p>
-                        <p className="text-xs font-bold text-white truncate">
-                          {company.contact_email || company.owner_user?.email}
-                        </p>
-                      </div>
+                {company.contact_locked || !company.is_unlocked ? (
+                  <div className="py-8 px-4 text-center space-y-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                    <div className="w-12 h-12 rounded-2xl bg-[#4F6BFF]/15 border border-[#4F6BFF]/30 flex items-center justify-center text-[#60A5FA] mx-auto">
+                      <Shield className="text-[#60A5FA]" size={22} />
                     </div>
-                  )}
+                    <div>
+                      <h4 className="text-sm font-bold text-white">🔒 Private Contact Information</h4>
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                        Contact details (Email, Phone, Telegram, Instagram, Discord) are protected. Use 1 credit to reveal full contact details.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleRevealCompany}
+                      disabled={isRevealingCompany}
+                      className="bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold text-xs px-5 py-2.5 rounded-xl gap-2 shadow-lg shadow-[#4F6BFF]/25"
+                    >
+                      {isRevealingCompany ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
+                      <span>Reveal Contact Details</span>
+                      <span className="ml-1 px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-mono">1 Credit</span>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {(company.contact_email || company.owner_user?.email) && (
+                      <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#4F6BFF]/15 text-[#60A5FA]">
+                          <Mail size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</p>
+                          <p className="text-xs font-bold text-white truncate">
+                            {company.contact_email || company.owner_user?.email}
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
-                  {(company.owner_user?.phone || company.phone) && (
-                    <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#10B981]/15 text-[#10B981]">
-                        <Phone size={16} />
+                    {(company.owner_user?.phone || company.phone) && (
+                      <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#10B981]/15 text-[#10B981]">
+                          <Phone size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Phone</p>
+                          <p className="text-xs font-bold text-white truncate">
+                            {company.owner_user?.phone || company.phone}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Phone</p>
-                        <p className="text-xs font-bold text-white truncate">
-                          {company.owner_user?.phone || company.phone}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {company.owner_user?.telegram_id && (
-                    <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#22C1DC]/15 text-[#22C1DC]">
-                        <Send size={16} />
+                    {company.owner_user?.telegram_id && (
+                      <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#22C1DC]/15 text-[#22C1DC]">
+                          <Send size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Telegram</p>
+                          <p className="text-xs font-bold text-white truncate">
+                            {company.owner_user.telegram_id}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Telegram</p>
-                        <p className="text-xs font-bold text-white truncate">
-                          {company.owner_user.telegram_id}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {company.owner_user?.instagram && (
-                    <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E1306C]/15 text-[#E1306C]">
-                        <Camera size={16} />
+                    {company.owner_user?.instagram && (
+                      <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E1306C]/15 text-[#E1306C]">
+                          <Camera size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Instagram</p>
+                          <p className="text-xs font-bold text-white truncate">
+                            {company.owner_user.instagram}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Instagram</p>
-                        <p className="text-xs font-bold text-white truncate">
-                          {company.owner_user.instagram}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {company.owner_user?.discord && (
-                    <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#5865F2]/15 text-[#5865F2]">
-                        <MessageSquare size={16} />
+                    {company.owner_user?.discord && (
+                      <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#5865F2]/15 text-[#5865F2]">
+                          <MessageSquare size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discord</p>
+                          <p className="text-xs font-bold text-white truncate">
+                            {company.owner_user.discord}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discord</p>
-                        <p className="text-xs font-bold text-white truncate">
-                          {company.owner_user.discord}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
+
 
           {/* 6. CONTACTS & DECISION MAKERS */}
           <motion.div
@@ -883,14 +1037,40 @@ export default function CompanyDetailPage({
                 <CardTitle className="text-sm font-bold text-white">Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="p-5 space-y-2.5">
-                <Button className="w-full bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold gap-2 rounded-xl py-2.5 shadow-md">
-                  <UserPlus size={16} />
-                  <span>Connect with Company</span>
-                </Button>
-                <Button variant="outline" className="w-full border-white/15 bg-white/[0.04] text-white hover:bg-white/10 gap-2 rounded-xl py-2.5">
-                  <MessageSquare size={16} />
-                  <span>Send Direct Message</span>
-                </Button>
+                {connectionStatus === "accepted" ? (
+                  <Button disabled className="w-full bg-[#10B981]/20 border border-[#10B981]/40 text-[#10B981] font-bold gap-2 rounded-xl py-2.5 cursor-default">
+                    <UserCheck size={16} />
+                    <span>Connected</span>
+                  </Button>
+                ) : connectionStatus === "pending" ? (
+                  <Button disabled className="w-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold gap-2 rounded-xl py-2.5 cursor-default">
+                    <Clock size={16} />
+                    <span>Request Pending</span>
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleConnectClick}
+                    disabled={submittingConnect}
+                    className="w-full bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold gap-2 rounded-xl py-2.5 shadow-md"
+                  >
+                    <UserPlus size={16} />
+                    <span>{submittingConnect ? "Sending..." : "Connect with Company"}</span>
+                  </Button>
+                )}
+
+                {connectionStatus === "accepted" ? (
+                  <Link href={`/app/messages?receiver_id=${company?.owner_user?.id || ""}`} className="block">
+                    <Button variant="outline" className="w-full border-white/15 bg-white/[0.04] text-white hover:bg-white/10 gap-2 rounded-xl py-2.5">
+                      <MessageSquare size={16} />
+                      <span>Send Direct Message</span>
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button disabled variant="outline" className="w-full border-white/10 bg-white/[0.02] text-slate-500 gap-2 rounded-xl py-2.5 opacity-60 cursor-not-allowed">
+                    <Lock size={15} />
+                    <span>Send Direct Message (Locked)</span>
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={handleToggleSave}
@@ -994,6 +1174,36 @@ export default function CompanyDetailPage({
           </motion.div>
         </div>
       </div>
+
+      {/* Insufficient Credits Modal */}
+      <Dialog open={showInsufficientModal} onOpenChange={setShowInsufficientModal}>
+        <DialogContent className="bg-[#111827] border-white/10 text-white sm:max-w-md" onClose={() => setShowInsufficientModal(false)}>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Zap className="text-[#4F6BFF]" size={20} />
+              Insufficient Contact Credits
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-400 mt-1">
+              You need at least 1 contact credit to reveal private contact details. Your current balance is {wallet?.balance ?? 0} credits.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 text-center space-y-2 bg-white/[0.02] rounded-xl border border-white/[0.06] my-2">
+            <p className="text-3xl font-black text-white">{wallet?.balance ?? 0} Credits</p>
+            <p className="text-xs text-slate-400">Top up your wallet or upgrade your plan to unlock decision-maker contacts.</p>
+          </div>
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setShowInsufficientModal(false)} className="border-white/15 text-slate-300">
+              Cancel
+            </Button>
+            <Link href="/app/subscription">
+              <Button size="sm" className="bg-[#4F6BFF] hover:bg-[#3B54E6] text-white font-bold gap-1.5 shadow-md">
+                <CreditCard size={14} /> Buy Credits / Upgrade
+              </Button>
+            </Link>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+

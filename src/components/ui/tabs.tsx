@@ -19,14 +19,14 @@ function useTabs() {
 }
 
 interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
-  defaultValue: string;
+  defaultValue?: string;
   value?: string;
   onValueChange?: (value: string) => void;
 }
 
-function Tabs({ defaultValue, value: controlledValue, onValueChange, children, className, ...props }: TabsProps) {
+function Tabs({ defaultValue = "", value: controlledValue, onValueChange, children, className, ...props }: TabsProps) {
   const [internalValue, setInternalValue] = React.useState(defaultValue);
-  const value = controlledValue ?? internalValue;
+  const value = controlledValue ?? internalValue ?? "";
   const handleChange = onValueChange ?? setInternalValue;
 
   return (

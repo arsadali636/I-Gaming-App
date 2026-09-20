@@ -9,12 +9,14 @@ export interface ApiErrorResponse {
 export class ApiError extends Error {
   status: number;
   errors?: Record<string, string[] | string>;
+  data?: any;
 
-  constructor(message: string, status: number, errors?: Record<string, string[] | string>) {
+  constructor(message: string, status: number, errors?: Record<string, string[] | string>, data?: any) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.errors = errors;
+    this.data = data;
   }
 }
 
@@ -24,9 +26,17 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = endpoint.startsWith("http")
-    ? endpoint
-    : `${API_BASE_URL.replace(/\/$/, "")}/${endpoint.replace(/^\//, "")}`;
+  const isV1 = endpoint.startsWith("/api/v1/") || endpoint.startsWith("api/v1/");
+  const isLocalApi = (endpoint.startsWith("/api/") || endpoint.startsWith("api/")) && !isV1;
+
+  let url: string;
+  if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+    url = endpoint;
+  } else if (isLocalApi) {
+    url = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  } else {
+    url = `${API_BASE_URL.replace(/\/$/, "")}/${endpoint.replace(/^\//, "")}`;
+  }
 
   const headers = new Headers(options.headers || {});
 
@@ -86,7 +96,7 @@ async function request<T>(
       }
     }
 
-    throw new ApiError(errorMessage, response.status, fieldErrors);
+    throw new ApiError(errorMessage, response.status, fieldErrors, data);
   }
 
   return data as T;
