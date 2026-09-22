@@ -85,6 +85,7 @@ export const messageSchema = z.object({
   content: z.string().min(1, "Message cannot be empty").max(5000, "Message too long"),
   conversation_id: z.string().optional(),
   receiver_id: z.string().optional(),
+  use_credits: z.boolean().optional(),
 });
 
 export const reportSchema = z.object({

@@ -170,8 +170,19 @@ export default function DashboardMarketplacePage() {
 
       if (json) {
         const list = json.companies || (Array.isArray(json) ? json : []);
-        setCompanies(list);
-        setTotalCount(json.total ?? list.length);
+        const seenIds = new Set<string>();
+        const uniqueList: Company[] = [];
+        for (const item of list) {
+          const id = item.id || item.slug;
+          if (id && !seenIds.has(id)) {
+            seenIds.add(id);
+            uniqueList.push(item);
+          } else if (!id) {
+            uniqueList.push(item);
+          }
+        }
+        setCompanies(uniqueList);
+        setTotalCount(json.total ?? uniqueList.length);
       } else {
         setCompanies([]);
         setTotalCount(0);

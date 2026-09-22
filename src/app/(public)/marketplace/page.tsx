@@ -151,11 +151,22 @@ export default function PublicMarketplacePage() {
 
       if (json) {
         const results = json.companies || (Array.isArray(json) ? json : []);
-        const totalCount = json.total ?? results.length;
+        const seenIds = new Set<string>();
+        const uniqueResults: Company[] = [];
+        for (const item of results) {
+          const id = item.id || item.slug;
+          if (id && !seenIds.has(id)) {
+            seenIds.add(id);
+            uniqueResults.push(item);
+          } else if (!id) {
+            uniqueResults.push(item);
+          }
+        }
+        const totalCount = json.total ?? uniqueResults.length;
         const totalPages = json.total_pages ?? Math.max(1, Math.ceil(totalCount / 12));
 
         setData({
-          companies: results,
+          companies: uniqueResults,
           total: totalCount,
           page,
           per_page: 12,

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Send, MessageSquare } from "lucide-react";
+import { Send, MessageSquare, ShieldAlert, Coins, AlertCircle, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,11 @@ import { cn, formatDate } from "@/lib/utils";
 interface ConversationItem {
   id: string;
   participant: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  };
+  other_user?: {
     id: string;
     full_name: string;
     avatar_url?: string;
@@ -33,8 +39,11 @@ interface MessageItem {
   is_read: boolean;
 }
 
-export default function MessagesPage() {
-  const { user } = useAuth();
+function MessagesContent() {
+  const { user, wallet, refreshWallet } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [selectedConv, setSelectedConv] = useState<ConversationItem | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
@@ -42,36 +51,111 @@ export default function MessagesPage() {
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
+
+  // Error and credit gate states
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingCreditMsg, setPendingCreditMsg] = useState<{ content: string; conversation_id?: string } | null>(null);
+  const [insufficientCredits, setInsufficientCredits] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    async function fetchConversations() {
-      try {
-        const res = await fetch("/api/conversations");
-        if (res.ok) {
-          const data = await res.json();
-          setConversations(data.conversations ?? []);
+  const targetReceiverId = searchParams.get("receiver_id") || searchParams.get("recipient");
+  const targetConvId = searchParams.get("conversation_id");
+
+  const fetchConversations = useCallback(async () => {
+    setLoadingConvs(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch("/api/messages");
+      if (res.ok) {
+        const data = await res.json();
+        const list: ConversationItem[] = (data.conversations ?? []).map((c: any) => ({
+          ...c,
+          participant: c.participant || c.other_user,
+        }));
+        setConversations(list);
+        return list;
+      } else {
+        const data = await res.json();
+        if (res.status === 403 && data.code === "CONNECTION_REQUIRED") {
+          setErrorMessage(data.error);
         }
-      } catch {} finally {
-        setLoadingConvs(false);
       }
+    } catch {
+      setErrorMessage("Failed to load conversations");
+    } finally {
+      setLoadingConvs(false);
     }
-    fetchConversations();
+    return [];
   }, []);
 
   const fetchMessages = useCallback(async (convId: string) => {
     setLoadingMessages(true);
+    setErrorMessage(null);
     try {
-      const res = await fetch(`/api/conversations/${convId}/messages`);
+      const res = await fetch(`/api/messages?conversation_id=${convId}`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data.messages ?? []);
+        // Update unread count locally for selected conversation
+        setConversations((prev) =>
+          prev.map((c) => (c.id === convId ? { ...c, unread_count: 0 } : c))
+        );
+      } else {
+        const data = await res.json();
+        if (res.status === 403 && data.code === "CONNECTION_REQUIRED") {
+          setErrorMessage(data.error);
+        } else {
+          setErrorMessage(data.error || "Failed to load messages");
+        }
       }
-    } catch {} finally {
+    } catch {
+      setErrorMessage("Failed to load messages");
+    } finally {
       setLoadingMessages(false);
     }
   }, []);
+
+  // Initial load
+  useEffect(() => {
+    async function init() {
+      const convs = await fetchConversations();
+
+      if (targetConvId) {
+        const found = convs.find((c) => c.id === targetConvId);
+        if (found) {
+          setSelectedConv(found);
+        } else {
+          // Attempt to fetch direct conversation details
+          fetchMessages(targetConvId);
+        }
+      } else if (targetReceiverId) {
+        const found = convs.find(
+          (c) => c.participant?.id === targetReceiverId || c.other_user?.id === targetReceiverId
+        );
+        if (found) {
+          setSelectedConv(found);
+        } else {
+          // Attempt conversation lookup or creation with recipient
+          try {
+            const res = await fetch("/api/messages", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content: "Hello", receiver_id: targetReceiverId }),
+            });
+            const data = await res.json();
+            if (res.status === 403 && data.code === "CONNECTION_REQUIRED") {
+              setErrorMessage(data.error);
+            } else if (res.ok && data.message) {
+              await fetchConversations();
+            }
+          } catch {}
+        }
+      }
+    }
+    init();
+  }, [fetchConversations, targetConvId, targetReceiverId, fetchMessages]);
 
   useEffect(() => {
     if (selectedConv) {
@@ -87,20 +171,36 @@ export default function MessagesPage() {
     if (selectedConv) inputRef.current?.focus();
   }, [selectedConv]);
 
-  const handleSend = async () => {
-    if (!newMessage.trim() || !selectedConv || sending) return;
+  const handleSend = async (overrideContent?: string, useCredits?: boolean) => {
+    const content = (overrideContent || newMessage).trim();
+    if (!content || !selectedConv || sending) return;
+
     setSending(true);
-    const content = newMessage.trim();
-    setNewMessage("");
+    setErrorMessage(null);
+    setInsufficientCredits(false);
+
     try {
-      const res = await fetch(`/api/conversations/${selectedConv.id}/messages`, {
+      const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          conversation_id: selectedConv.id,
+          use_credits: useCredits ?? false,
+        }),
       });
+
+      const data = await res.json();
+
       if (res.ok) {
-        const data = await res.json();
         setMessages((prev) => [...prev, data.message]);
+        setNewMessage("");
+        setPendingCreditMsg(null);
+
+        if (data.credit_deducted && refreshWallet) {
+          refreshWallet();
+        }
+
         setConversations((prev) =>
           prev.map((c) =>
             c.id === selectedConv.id
@@ -108,8 +208,23 @@ export default function MessagesPage() {
               : c
           )
         );
+      } else if (res.status === 402) {
+        if (data.code === "CONTACT_MESSAGE_REQUIRES_CREDITS") {
+          setPendingCreditMsg({ content, conversation_id: selectedConv.id });
+        } else if (data.code === "INSUFFICIENT_CREDITS") {
+          setInsufficientCredits(true);
+          setPendingCreditMsg(null);
+        } else {
+          setErrorMessage(data.error || "Payment or credit required");
+        }
+      } else if (res.status === 403) {
+        setErrorMessage(data.error || "Messaging is available only after the connection request is accepted");
+      } else {
+        setErrorMessage(data.error || "Failed to send message");
       }
-    } catch {} finally {
+    } catch {
+      setErrorMessage("Network error sending message");
+    } finally {
       setSending(false);
     }
   };
@@ -123,9 +238,16 @@ export default function MessagesPage() {
           selectedConv && "hidden sm:flex"
         )}
       >
-        <div className="p-4 border-b border-glass-border">
+        <div className="p-4 border-b border-glass-border flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">Messages</h3>
+          {wallet && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/10 border border-primary/20 text-xs font-medium text-primary">
+              <Coins size={13} />
+              <span>{wallet.balance} Credits</span>
+            </div>
+          )}
         </div>
+
         <div className="flex-1 overflow-y-auto">
           {loadingConvs ? (
             <div className="p-3 space-y-2">
@@ -136,29 +258,38 @@ export default function MessagesPage() {
           ) : conversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-4 text-center">
               <MessageSquare size={32} className="text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">No conversations yet</p>
+              <p className="text-sm font-medium text-foreground">No conversations yet</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Connect with professionals to start messaging.
+              </p>
             </div>
           ) : (
             conversations.map((conv) => {
               const isActive = selectedConv?.id === conv.id;
+              const p = conv.participant || conv.other_user;
               return (
                 <button
                   key={conv.id}
-                  onClick={() => setSelectedConv(conv)}
+                  onClick={() => {
+                    setSelectedConv(conv);
+                    setPendingCreditMsg(null);
+                    setErrorMessage(null);
+                    setInsufficientCredits(false);
+                  }}
                   className={cn(
                     "w-full flex items-center gap-3 p-3 transition-colors text-left",
                     isActive ? "bg-primary/10 border-r-2 border-primary" : "hover:bg-white/[0.03]"
                   )}
                 >
                   <Avatar
-                    src={conv.participant.avatar_url}
-                    fallback={conv.participant.full_name}
+                    src={p?.avatar_url}
+                    fallback={p?.full_name || "User"}
                     size="default"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium text-foreground truncate">
-                        {conv.participant.full_name}
+                        {p?.full_name || "Connected User"}
                       </p>
                       {conv.last_message && (
                         <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
@@ -193,24 +324,35 @@ export default function MessagesPage() {
       >
         {selectedConv ? (
           <>
-            <div className="flex items-center gap-3 p-3 border-b border-glass-border glass sm:hidden">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setSelectedConv(null)}
-              >
-                &larr;
-              </Button>
-              <Avatar
-                src={selectedConv.participant.avatar_url}
-                fallback={selectedConv.participant.full_name}
-                size="sm"
-              />
-              <p className="text-sm font-medium text-foreground">
-                {selectedConv.participant.full_name}
-              </p>
+            <div className="flex items-center justify-between p-3 border-b border-glass-border glass">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 sm:hidden"
+                  onClick={() => setSelectedConv(null)}
+                >
+                  &larr;
+                </Button>
+                <Avatar
+                  src={(selectedConv.participant || selectedConv.other_user)?.avatar_url}
+                  fallback={(selectedConv.participant || selectedConv.other_user)?.full_name || "User"}
+                  size="sm"
+                />
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {(selectedConv.participant || selectedConv.other_user)?.full_name || "Connected User"}
+                  </p>
+                </div>
+              </div>
             </div>
+
+            {errorMessage && (
+              <div className="p-3 bg-destructive/10 border-b border-destructive/20 text-destructive text-xs flex items-center gap-2">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {loadingMessages ? (
@@ -220,7 +362,8 @@ export default function MessagesPage() {
                   ))}
                 </div>
               ) : messages.length === 0 ? (
-                <div className="flex items-center justify-center h-full">
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <MessageSquare size={36} className="text-muted-foreground/30 mb-2" />
                   <p className="text-sm text-muted-foreground">
                     No messages yet. Say hello!
                   </p>
@@ -243,7 +386,7 @@ export default function MessagesPage() {
                             : "glass-card text-foreground"
                         )}
                       >
-                        <p className="text-sm leading-relaxed">{msg.content}</p>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
                           {new Date(msg.created_at).toLocaleTimeString([], {
                             hour: "2-digit",
@@ -258,6 +401,78 @@ export default function MessagesPage() {
               <div ref={messagesEndRef} />
             </div>
 
+            {/* Contact Information Credit Gate Banner */}
+            {pendingCreditMsg && (
+              <div className="p-4 mx-3 mb-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 glass">
+                <div className="flex items-start gap-3">
+                  <ShieldAlert size={20} className="text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-semibold text-amber-300">
+                      Use your credits to send this message.
+                    </h4>
+                    <p className="text-xs text-amber-200/80 mt-1">
+                      Your message contains contact information. Sending this message will consume 1 contact credit from your wallet balance.
+                    </p>
+                    <div className="flex items-center gap-2 mt-3">
+                      <Button
+                        size="sm"
+                        className="bg-amber-500 hover:bg-amber-600 text-black font-semibold gap-1.5"
+                        disabled={sending}
+                        onClick={() => handleSend(pendingCreditMsg.content, true)}
+                      >
+                        <Coins size={14} /> Use Credits (1 Credit)
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-amber-300 hover:text-amber-100"
+                        disabled={sending}
+                        onClick={() => setPendingCreditMsg(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Insufficient Credits Banner */}
+            {insufficientCredits && (
+              <div className="p-4 mx-3 mb-2 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive-foreground glass">
+                <div className="flex items-start gap-3">
+                  <Coins size={20} className="text-destructive shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-semibold text-foreground">
+                      Insufficient contact credits.
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      You need at least 1 credit to send contact details in a message. Please top up your wallet or upgrade your plan.
+                    </p>
+                    <div className="flex items-center gap-2 mt-3">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="gap-1.5"
+                        onClick={() => router.push("/app/subscription")}
+                      >
+                        <ExternalLink size={14} /> Get Credits / Upgrade Plan
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setInsufficientCredits(false)}
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Composer */}
             <div className="p-3 border-t border-glass-border glass">
               <form
                 onSubmit={(e) => {
@@ -285,19 +500,46 @@ export default function MessagesPage() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <MessageSquare size={48} className="mx-auto text-muted-foreground/30 mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-1">
-                Select a conversation
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Choose a conversation from the list to start messaging.
-              </p>
-            </div>
+          <div className="flex-1 flex items-center justify-center p-6 text-center">
+            {errorMessage ? (
+              <div className="max-w-md p-6 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200">
+                <ShieldAlert size={40} className="mx-auto text-amber-400 mb-3" />
+                <h3 className="text-base font-semibold text-foreground mb-1">
+                  Connection Required
+                </h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  {errorMessage}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push("/app/connections")}
+                >
+                  View Connections
+                </Button>
+              </div>
+            ) : (
+              <div>
+                <MessageSquare size={48} className="mx-auto text-muted-foreground/30 mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-1">
+                  Select a conversation
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Choose a conversation from the list to start messaging.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading Messages...</div>}>
+      <MessagesContent />
+    </Suspense>
   );
 }
