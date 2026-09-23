@@ -1,8 +1,7 @@
-"use client";
-
+import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { BadgeCheck, Globe, UserPlus, Bookmark, BookmarkCheck, Share2, Mail } from "lucide-react";
+import { BadgeCheck, Globe, UserPlus, Bookmark, BookmarkCheck, Share2, Mail, Loader2 } from "lucide-react";
 import { truncate, getInitials } from "@/lib/utils";
 
 interface CountryObj {
@@ -52,6 +51,7 @@ interface Company {
   is_verified?: boolean | number;
   is_featured?: boolean | number;
   completionPercentage?: number;
+  saved?: boolean;
 }
 
 const FLAG_MAP: Record<string, string> = {
@@ -120,6 +120,7 @@ interface CompanyCardProps {
   company: Company;
   index?: number;
   isSaved?: boolean;
+  isSavePending?: boolean;
   onToggleSave?: (companyId: string) => void;
   onConnect?: (company: Company) => void;
   hrefPrefix?: string;
@@ -129,10 +130,13 @@ export default function CompanyCard({
   company,
   index = 0,
   isSaved = false,
+  isSavePending = false,
   onToggleSave,
   onConnect,
   hrefPrefix = "/app/company",
 }: CompanyCardProps) {
+  const [logoFailed, setLogoFailed] = useState(false);
+
   const {
     id,
     name,
@@ -221,10 +225,11 @@ export default function CompanyCard({
           <div className="flex items-start gap-4 min-w-0 flex-1">
             {/* Logo Box */}
             <Link href={`${hrefPrefix}/${companyTargetId}`} className="shrink-0">
-              {logo_url ? (
+              {logo_url && !logoFailed ? (
                 <img
                   src={logo_url}
                   alt={name}
+                  onError={() => setLogoFailed(true)}
                   className="w-16 h-16 rounded-2xl object-cover border border-[#1F2937] bg-[#070B14]"
                 />
               ) : (
@@ -380,17 +385,23 @@ export default function CompanyCard({
 
             {onToggleSave && id && (
               <button
+                disabled={isSavePending}
                 onClick={(e) => {
                   e.preventDefault();
-                  onToggleSave(id);
+                  if (!isSavePending) onToggleSave(id);
                 }}
-                className={`flex-1 lg:w-full py-2 px-3 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                className={`flex-1 lg:w-full py-2 px-3 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${
                   isSaved
                     ? "bg-[#2563EB]/15 text-[#2563EB] border-[#2563EB]/30"
                     : "bg-[#0D1320] text-[#94A3B8] hover:text-[#F8FAFC] border-[#1F2937] hover:bg-[#1F2937]"
                 }`}
               >
-                {isSaved ? (
+                {isSavePending ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin text-[#2563EB]" />
+                    <span>Saving...</span>
+                  </>
+                ) : isSaved ? (
                   <>
                     <BookmarkCheck size={13} className="text-[#2563EB]" />
                     <span>Saved</span>

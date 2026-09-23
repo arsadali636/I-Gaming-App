@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { initDb, getDb } from "@/lib/db";
-import { requireAuth } from "@/lib/auth-local";
+import { requireAuth, getSessionUser } from "@/lib/auth-local";
 import { companySchema } from "@/lib/validations";
 import { slugify } from "@/lib/utils";
 import crypto from "crypto";
@@ -17,12 +17,25 @@ export async function GET(request: Request) {
     const country = searchParams.get("country") || "";
     const market = searchParams.get("market") || "";
     const verified = searchParams.get("verified") || "";
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("per_page") || searchParams.get("limit") || "12", 10);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const rawLimit = parseInt(searchParams.get("per_page") || searchParams.get("limit") || "12", 10);
+    const limit = Math.min(100, Math.max(1, isNaN(rawLimit) ? 12 : rawLimit));
     const sort = searchParams.get("sort") || "newest";
 
     const offset = (page - 1) * limit;
     const db = getDb();
+
+    // Derive optional session user purely from session token/cookie (NEVER trust query params or headers)
+    const user = await getSessionUser();
+
+    // Retrieve saved company IDs for authenticated user ONLY (1 single query, avoiding N+1)
+    const savedMap = new Map<string, string>();
+    if (user && user.id) {
+      const savedRows = db
+        .prepare("SELECT company_id, id FROM saved_companies WHERE user_id = ?")
+        .all(user.id) as { company_id: string; id: string }[];
+      savedRows.forEach((r) => savedMap.set(r.company_id, r.id));
+    }
 
     const roleParam = searchParams.get("role") || searchParams.get("business_role") || "";
     const companySizeParam = searchParams.get("company_size") || searchParams.get("size") || "";
@@ -126,6 +139,7 @@ export async function GET(request: Request) {
       .get(...params) as { total: number };
 
     const total = countRow.total;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
 
     const rows = db
       .prepare(
@@ -213,9 +227,14 @@ export async function GET(request: Request) {
       const safeContactEmail = rawCompEmail && rawCompEmail !== row.owner_email ? rawCompEmail : null;
       const { owner_email: _, ...cleanRow } = row;
 
+      const isSaved = savedMap.has(compId);
+      const savedId = savedMap.get(compId) || null;
+
       return {
         ...cleanRow,
         contact_email: safeContactEmail,
+        saved: isSaved,
+        saved_id: savedId,
 
         categories: cats,
         category_ids: cats.map((c) => c.id),
@@ -253,14 +272,25 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         companies,
+        items: companies,
         total,
         page,
         per_page: limit,
-        total_pages: Math.ceil(total / limit),
+        total_pages: totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+        pagination: {
+          page,
+          per_page: limit,
+          total,
+          total_pages: totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        },
       },
       { status: 200 }
     );
-  } catch {
+  } catch (err: any) {
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

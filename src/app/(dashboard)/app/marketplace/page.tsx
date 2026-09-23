@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,6 +12,8 @@ import {
   Store,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   BadgeCheck,
   Globe,
   Zap,
@@ -95,8 +97,12 @@ const COMPANY_SIZE_OPTIONS = ["1 - 10", "11 - 50", "51 - 200", "201 - 500", "501
 
 export default function DashboardMarketplacePage() {
   const { wallet } = useAuth();
+  const topRef = useRef<HTMLDivElement>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const [page, setPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const perPage = 12;
   const [loading, setLoading] = useState(true);
 
   // Master Data Options
@@ -121,8 +127,9 @@ export default function DashboardMarketplacePage() {
   // Sidebar Accordion states
   const [showMoreCountries, setShowMoreCountries] = useState(false);
 
-  // Saved companies state
+  // Saved companies state & pending saves
   const [savedMap, setSavedMap] = useState<Map<string, string>>(new Map());
+  const [pendingSaveIds, setPendingSaveIds] = useState<Set<string>>(new Set());
 
   // Saved searches state
   const [savedSearches, setSavedSearches] = useState<SavedSearchItem[]>([]);
@@ -149,8 +156,8 @@ export default function DashboardMarketplacePage() {
     fetchMasterOptions();
   }, []);
 
-  // Fetch Companies
-  const fetchCompanies = useCallback(async () => {
+  // Fetch Companies with server-side pagination
+  const fetchCompanies = useCallback(async (targetPage = page) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -160,7 +167,8 @@ export default function DashboardMarketplacePage() {
       if (selectedSizes.length > 0) params.set("company_size", selectedSizes[0]);
       if (verifiedOnly) params.set("verified", "true");
       params.set("sort", sortBy);
-      params.set("limit", "50");
+      params.set("page", String(targetPage));
+      params.set("per_page", String(perPage));
 
       let json: any = null;
       try {
@@ -169,41 +177,89 @@ export default function DashboardMarketplacePage() {
       } catch {}
 
       if (json) {
-        const list = json.companies || (Array.isArray(json) ? json : []);
+        const list = json.companies || json.items || (Array.isArray(json) ? json : []);
         const seenIds = new Set<string>();
         const uniqueList: Company[] = [];
+        const newSavedMap = new Map(savedMap);
+
         for (const item of list) {
           const id = item.id || item.slug;
           if (id && !seenIds.has(id)) {
             seenIds.add(id);
             uniqueList.push(item);
+            if (item.saved || item.saved_id) {
+              newSavedMap.set(id, item.saved_id || "saved");
+            }
           } else if (!id) {
             uniqueList.push(item);
           }
         }
         setCompanies(uniqueList);
+        setSavedMap(newSavedMap);
         setTotalCount(json.total ?? uniqueList.length);
+        setTotalPages(json.total_pages ?? Math.max(1, Math.ceil((json.total ?? uniqueList.length) / perPage)));
       } else {
         setCompanies([]);
         setTotalCount(0);
+        setTotalPages(1);
       }
     } catch {} finally {
       setLoading(false);
     }
-  }, [search, selectedCategories, selectedCountries, selectedSizes, verifiedOnly, sortBy]);
+  }, [search, selectedCategories, selectedCountries, selectedSizes, verifiedOnly, sortBy, page, perPage]);
+
+  const scrollToTop = useCallback(() => {
+    if (typeof window !== "undefined") {
+      const mainEl = document.querySelector("main");
+      if (mainEl) {
+        mainEl.scrollTop = 0;
+        try {
+          mainEl.scrollTo({ top: 0, behavior: "instant" });
+        } catch {}
+      }
+      window.scrollTo({ top: 0, behavior: "instant" });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      if (topRef.current) {
+        try {
+          topRef.current.scrollIntoView({ behavior: "instant", block: "start" });
+        } catch {}
+      }
+    }
+  }, []);
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedCategories, selectedCountries, selectedSizes, selectedSoftware, selectedServices, selectedLicenses, verifiedOnly, sortBy]);
 
   useEffect(() => {
-    fetchCompanies();
-  }, [fetchCompanies]);
+    fetchCompanies(page);
+    scrollToTop();
+  }, [fetchCompanies, page, scrollToTop]);
 
-  // Saved companies & searches
+  useEffect(() => {
+    if (!loading) {
+      scrollToTop();
+      requestAnimationFrame(() => {
+        scrollToTop();
+      });
+    }
+  }, [loading, scrollToTop]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    scrollToTop();
+  };
+
+  // Saved companies & searches initial sync
   const fetchSavedCompanies = useCallback(async () => {
     try {
-      const res = await apiClient.get<any>("/api/v1/saved-companies/");
+      const res = await apiClient.get<any>("/api/saved-companies");
       const list = Array.isArray(res) ? res : res.results ?? [];
       const map = new Map<string, string>();
       list.forEach((item: any) => {
-        const compId = item.company || item.company_detail?.id;
+        const compId = item.company || item.company_id || item.company_detail?.id;
         if (compId) map.set(compId, item.id);
       });
       setSavedMap(map);
@@ -224,32 +280,51 @@ export default function DashboardMarketplacePage() {
   }, [fetchSavedCompanies, fetchSavedSearches]);
 
   const handleToggleSave = async (companyId: string) => {
-    const isSaved = savedMap.has(companyId);
-    const savedRecordId = savedMap.get(companyId);
+    if (pendingSaveIds.has(companyId)) return;
 
-    setSavedMap((prev) => {
-      const next = new Map(prev);
-      if (isSaved) next.delete(companyId);
-      else next.set(companyId, "pending");
-      return next;
-    });
+    const isCurrentlySaved = savedMap.has(companyId);
+    const existingRecordId = savedMap.get(companyId);
+
+    // Set pending state for this specific card
+    setPendingSaveIds((prev) => new Set(prev).add(companyId));
 
     try {
-      if (isSaved && savedRecordId && savedRecordId !== "pending") {
-        await apiClient.delete(`/api/v1/saved-companies/${savedRecordId}/`);
-        fetchSavedCompanies();
-      } else {
-        const res = await apiClient.post<any>("/api/v1/saved-companies/", {
-          company: companyId,
+      if (isCurrentlySaved) {
+        // Unsave request
+        const endpoint = existingRecordId && existingRecordId !== "saved" && existingRecordId !== "pending"
+          ? `/api/saved-companies/${existingRecordId}`
+          : `/api/saved-companies?company_id=${companyId}`;
+
+        await apiClient.delete(endpoint);
+
+        setSavedMap((prev) => {
+          const next = new Map(prev);
+          next.delete(companyId);
+          return next;
         });
-        if (res && res.id) {
-          setSavedMap((prev) => new Map(prev).set(companyId, res.id));
-        } else {
-          fetchSavedCompanies();
-        }
+        setCompanies((prev) =>
+          prev.map((c) => (c.id === companyId ? { ...c, saved: false, saved_id: null } : c))
+        );
+      } else {
+        // Save request
+        const res = await apiClient.post<any>("/api/saved-companies", {
+          company_id: companyId,
+        });
+
+        const newRecordId = res?.id || "saved";
+        setSavedMap((prev) => new Map(prev).set(companyId, newRecordId));
+        setCompanies((prev) =>
+          prev.map((c) => (c.id === companyId ? { ...c, saved: true, saved_id: newRecordId } : c))
+        );
       }
-    } catch {
-      fetchSavedCompanies();
+    } catch (err) {
+      console.error("Save/Unsave error:", err);
+    } finally {
+      setPendingSaveIds((prev) => {
+        const next = new Set(prev);
+        next.delete(companyId);
+        return next;
+      });
     }
   };
 
@@ -370,6 +445,7 @@ export default function DashboardMarketplacePage() {
 
   return (
     <div className="min-h-screen bg-[#070B14] text-[#F8FAFC] p-4 md:p-6 lg:p-8">
+      <div ref={topRef} />
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* TOP MARKETPLACE HEADER BLOCK */}
@@ -771,15 +847,41 @@ export default function DashboardMarketplacePage() {
               <div className="space-y-4">
                 {companies.map((company, index) => (
                   <CompanyCard
-                    key={company.id}
+                    key={company.id || company.slug}
                     company={company}
                     index={index}
                     isSaved={savedMap.has(company.id || "")}
+                    isSavePending={pendingSaveIds.has(company.id || "")}
                     onToggleSave={handleToggleSave}
                     onConnect={() => {}}
                     hrefPrefix="/app/company"
                   />
                 ))}
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-6">
+                <button
+                  onClick={() => handlePageChange(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                  className="p-2.5 rounded-xl bg-[#0D1320] border border-[#1F2937] text-[#94A3B8] hover:text-[#F8FAFC] disabled:opacity-40 cursor-pointer transition-all flex items-center gap-1.5 text-xs font-semibold"
+                >
+                  <ChevronLeft size={16} />
+                  <span>Previous</span>
+                </button>
+                <span className="text-xs font-semibold text-[#94A3B8] px-4 py-2 rounded-xl bg-[#0D1320] border border-[#1F2937]">
+                  Page <strong className="text-[#F8FAFC]">{page}</strong> of {totalPages}
+                </span>
+                <button
+                  onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
+                  disabled={page === totalPages}
+                  className="p-2.5 rounded-xl bg-[#0D1320] border border-[#1F2937] text-[#94A3B8] hover:text-[#F8FAFC] disabled:opacity-40 cursor-pointer transition-all flex items-center gap-1.5 text-xs font-semibold"
+                >
+                  <span>Next</span>
+                  <ChevronRight size={16} />
+                </button>
               </div>
             )}
           </main>

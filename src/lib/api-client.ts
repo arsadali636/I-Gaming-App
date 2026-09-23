@@ -26,8 +26,7 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const isV1 = endpoint.startsWith("/api/v1/") || endpoint.startsWith("api/v1/");
-  const isLocalApi = (endpoint.startsWith("/api/") || endpoint.startsWith("api/")) && !isV1;
+  const isLocalApi = endpoint.startsWith("/api/") || endpoint.startsWith("api/");
 
   let url: string;
   if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {

@@ -58,6 +58,7 @@ export default function SavedPage() {
   const [saved, setSaved] = useState<SavedCompanyItem[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearchItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [selected, setSelected] = useState<SavedCompanyItem | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -67,22 +68,37 @@ export default function SavedPage() {
 
   const fetchSaved = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const data = await apiClient.get<any>("/api/v1/saved-companies/");
-      const list = Array.isArray(data) ? data : data.results ?? [];
+      let data: any = null;
+      try {
+        data = await apiClient.get<any>("/api/saved-companies");
+      } catch (e) {
+        const res = await fetch("/api/saved-companies");
+        if (res.ok) data = await res.json();
+      }
+
+      if (!data) {
+        throw new Error("Failed to load saved items");
+      }
+
+      const list = Array.isArray(data) ? data : data.results || data.items || data.companies || [];
       const normalized = list.map((item: any) => ({
         id: item.id,
-        company_id: item.company_detail?.id || item.company,
-        company_name: item.company_detail?.name || "Company",
-        company_slug: item.company_detail?.slug || "",
-        company_logo: item.company_detail?.logo_url,
-        company_description: item.company_detail?.description,
-        company_headquarters: item.company_detail?.country_detail?.name || item.company_detail?.country || "",
-        notes: item.notes,
-        created_at: item.created_at,
+        company_id: item.company_id || item.company || item.company_detail?.id,
+        company_name: item.company_name || item.company_detail?.name || "Company",
+        company_slug: item.company_slug || item.company_detail?.slug || "",
+        company_logo: item.company_logo || item.company_detail?.logo_url,
+        company_description: item.company_description || item.company_detail?.description,
+        company_headquarters: item.company_headquarters || item.company_detail?.country_detail?.name || item.company_detail?.country || "",
+        notes: item.notes || "",
+        created_at: item.created_at || new Date().toISOString(),
       }));
       setSaved(normalized);
-    } catch {} finally {
+    } catch (err: any) {
+      console.error("Error fetching saved companies:", err);
+      setError("Unable to load saved companies. Please try again.");
+    } finally {
       setLoading(false);
     }
   }, []);
@@ -101,9 +117,9 @@ export default function SavedPage() {
   }, [fetchSaved, fetchSavedSearches]);
 
   const handleRemoveCompany = async (itemId: string) => {
-    setSaved((prev) => prev.filter((s) => s.id !== itemId));
+    setSaved((prev) => prev.filter((s) => s.id !== itemId && s.company_id !== itemId));
     try {
-      await apiClient.delete(`/api/v1/saved-companies/${itemId}/`);
+      await apiClient.delete(`/api/saved-companies/${itemId}`);
     } catch {
       fetchSaved();
     }
@@ -200,6 +216,13 @@ export default function SavedPage() {
               {Array.from({ length: 6 }).map((_, i) => (
                 <Skeleton key={i} className="h-48 w-full" />
               ))}
+            </div>
+          ) : error ? (
+            <div className="text-center py-16 rounded-2xl bg-card border border-border p-6">
+              <p className="text-sm font-semibold text-destructive mb-3">{error}</p>
+              <Button onClick={() => fetchSaved()} variant="outline" size="sm" className="gap-2">
+                Retry Loading
+              </Button>
             </div>
           ) : sorted.length === 0 ? (
             <div className="text-center py-16">

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Search,
   X,
@@ -89,6 +90,7 @@ function getFlag(code?: string): string {
 const COMPANY_SIZE_OPTIONS = ["1 - 10", "11 - 50", "51 - 200", "201 - 500", "501 - 1,000"];
 
 export default function PublicMarketplacePage() {
+  const topRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
@@ -103,6 +105,11 @@ export default function PublicMarketplacePage() {
   const [data, setData] = useState<CompaniesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMoreCountries, setShowMoreCountries] = useState(false);
+  const router = useRouter();
+
+  const handleToggleSave = () => {
+    router.push("/login");
+  };
 
   // Master options
   const [masterCategories, setMasterCategories] = useState<CategoryMaster[]>([]);
@@ -182,13 +189,48 @@ export default function PublicMarketplacePage() {
     }
   }, [search, selectedCategories, selectedCountries, selectedSizes, verifiedOnly, sortBy, page]);
 
+  const scrollToTop = useCallback(() => {
+    if (typeof window !== "undefined") {
+      const mainEl = document.querySelector("main");
+      if (mainEl) {
+        mainEl.scrollTop = 0;
+        try {
+          mainEl.scrollTo({ top: 0, behavior: "instant" });
+        } catch {}
+      }
+      window.scrollTo({ top: 0, behavior: "instant" });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      if (topRef.current) {
+        try {
+          topRef.current.scrollIntoView({ behavior: "instant", block: "start" });
+        } catch {}
+      }
+    }
+  }, []);
+
   useEffect(() => {
     fetchCompanies();
-  }, [fetchCompanies]);
+    scrollToTop();
+  }, [fetchCompanies, page, scrollToTop]);
+
+  useEffect(() => {
+    if (!loading) {
+      scrollToTop();
+      requestAnimationFrame(() => {
+        scrollToTop();
+      });
+    }
+  }, [loading, scrollToTop]);
 
   useEffect(() => {
     setPage(1);
   }, [search, selectedCategories, selectedCountries, selectedSizes, verifiedOnly, sortBy]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    scrollToTop();
+  };
 
   const toggleCategory = (slugOrName: string) => {
     setSelectedCategories((prev) =>
@@ -264,6 +306,7 @@ export default function PublicMarketplacePage() {
 
   return (
     <div className="min-h-screen bg-[#070B14] text-[#F8FAFC] p-4 md:p-6 lg:p-8">
+      <div ref={topRef} />
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* TOP MARKETPLACE HEADER BLOCK */}
@@ -649,6 +692,7 @@ export default function PublicMarketplacePage() {
                     key={company.slug || company.id}
                     company={company}
                     index={index}
+                    onToggleSave={handleToggleSave}
                     hrefPrefix="/company"
                   />
                 ))}
@@ -659,7 +703,7 @@ export default function PublicMarketplacePage() {
             {data && data.total_pages > 1 && (
               <div className="flex items-center justify-center gap-2 pt-6">
                 <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => handlePageChange(Math.max(1, page - 1))}
                   disabled={page === 1}
                   className="p-2 rounded-xl bg-[#0D1320] border border-[#1F2937] text-[#94A3B8] hover:text-[#F8FAFC] disabled:opacity-40 cursor-pointer"
                 >
@@ -669,7 +713,7 @@ export default function PublicMarketplacePage() {
                   Page <strong className="text-[#F8FAFC]">{page}</strong> of {data.total_pages}
                 </span>
                 <button
-                  onClick={() => setPage((p) => Math.min(data.total_pages, p + 1))}
+                  onClick={() => handlePageChange(Math.min(data.total_pages, page + 1))}
                   disabled={page === data.total_pages}
                   className="p-2 rounded-xl bg-[#0D1320] border border-[#1F2937] text-[#94A3B8] hover:text-[#F8FAFC] disabled:opacity-40 cursor-pointer"
                 >
